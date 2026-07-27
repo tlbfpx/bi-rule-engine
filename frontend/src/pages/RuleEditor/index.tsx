@@ -6,6 +6,7 @@ import ConditionBuilder from './ConditionBuilder';
 import CleaningConfig from './CleaningConfig';
 import LookupConfig from './LookupConfig';
 import FormulaEditor from './FormulaEditor';
+import FlowchartPreview from './FlowchartPreview';
 
 export default function RuleEditorDrawer() {
   const store = useRuleEditorStore();
@@ -89,6 +90,11 @@ export default function RuleEditorDrawer() {
         {store.ruleType === 'cleaning' && <CleaningConfig />}
         {store.ruleType === 'lookup' && <LookupConfig />}
         {store.ruleType === 'computed' && <FormulaEditor />}
+
+        <Divider style={{ margin: '12px 0' }} />
+
+        {/* 单条规则逻辑流程图（实时） */}
+        <FlowchartPreview />
       </div>
     </Drawer>
   );
