@@ -26,10 +26,9 @@ function FlowInner() {
   const config = useRuleEditorStore((s) => s.config);
   const dependsOn = useRuleEditorStore((s) => s.dependsOn);
 
-  // 仅 lookup 类型需要解析表名；其余类型拉 1 条即可（react-query 缓存）
-  const { data: tablesData } = useLookupTables(
-    ruleType === 'lookup' ? { page_size: 200 } : { page_size: 1 },
-  );
+  // 仅 lookup 类型需要解析表名；其余类型禁用查询，避免每次打开抽屉都发无用请求
+  const isLookup = ruleType === 'lookup';
+  const { data: tablesData } = useLookupTables({ page_size: 200 }, isLookup);
   const tablesById = useMemo(
     () =>
       new Map(

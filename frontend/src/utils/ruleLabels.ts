@@ -64,3 +64,9 @@ export const RESULT_TYPE_LABEL: Record<ConditionGroup['result_type'], string> = 
 
 /** default_result 字符串哨兵：表示保持目标字段原值 */
 export const DEFAULT_KEEP_ORIGINAL = 'keep_original';
+
+/** 无需取值的运算符（条件行不渲染 value 输入）。集中定义避免多处重复判断。 */
+export const NO_VALUE_OPERATORS: ReadonlySet<OperatorType> = new Set([
+  'is_null',
+  'is_not_null',
+]);

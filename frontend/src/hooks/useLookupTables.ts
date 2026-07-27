@@ -1,10 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { lookupTablesApi } from '../api/lookupTables';
 
-export function useLookupTables(params?: { page?: number; page_size?: number; search?: string }) {
+export function useLookupTables(
+  params?: { page?: number; page_size?: number; search?: string },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ['lookup-tables', params],
     queryFn: () => lookupTablesApi.list(params),
+    enabled,
   });
 }
 

@@ -2,7 +2,11 @@
  * 流程图节点文案格式化纯函数。
  */
 import type { ConditionRow, CleaningStep } from '../../../types';
-import { OPERATOR_LABEL, CLEANING_ACTION_LABEL } from '../../../utils/ruleLabels';
+import {
+  OPERATOR_LABEL,
+  CLEANING_ACTION_LABEL,
+  NO_VALUE_OPERATORS,
+} from '../../../utils/ruleLabels';
 
 /** 单值/数组/对象值的可读化与截断。 */
 export function formatValue(value: unknown, maxLen = 24): string {
@@ -30,8 +34,7 @@ function truncate(s: string, maxLen: number): string {
 export function formatConditionRow(row: ConditionRow, maxLen = 28): string {
   const field = row.field?.trim() || '(未选择字段)';
   const opLabel = OPERATOR_LABEL[row.operator] || row.operator;
-  const noValue = row.operator === 'is_null' || row.operator === 'is_not_null';
-  if (noValue) return `${field} ${opLabel}`;
+  if (NO_VALUE_OPERATORS.has(row.operator)) return `${field} ${opLabel}`;
   return `${field} ${opLabel} ${formatValue(row.value, maxLen)}`;
 }
 
