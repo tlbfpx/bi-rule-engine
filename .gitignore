@@ -1,0 +1,55 @@
+# ── OS / 编辑器 ──
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Node ──
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ── 密钥 / 环境变量（切勿入库）──
+.env
+.env.*
+!.env.example
+
+# ── 日志 ──
+logs/
+*.log
+
+# ── 测试 / 覆盖率产物 ──
+coverage/
+*.lcov
+test-results/
+e2e-report/
+playwright-report/
+test-report.html
+test-summary.html
+test-results.json
+
+# ── 构建产物 ──
+*.tar.gz
+html.meta.json.gz
+
+# ── 数据 / 运行时（含业务数据，不入库；测试数据可用 scripts/gen_test_data.py 重新生成）──
+storage/
+*.sql
+*.xlsx
+*.csv
+
+# ── 工具状态 ──
+.workbuddy/

@@ -1,0 +1,83 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 条件构建器样式 */
+.condition-group-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #fff;
+  transition: box-shadow 0.2s;
+}
+
+.condition-group-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.condition-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  border-radius: 8px 8px 0 0;
+}
+
+.condition-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+}
+
+.condition-row + .condition-row {
+  border-top: 1px solid #f5f5f5;
+}
+
+/* 抽屉内滚动 */
+.rule-editor-body {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+/* DAG 视图 */
+.dag-container {
+  width: 100%;
+  height: calc(100vh - 120px);
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* 任务中心布局 */
+.task-center-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 120px);
+}
+
+.task-center-left {
+  flex: 1;
+  overflow: auto;
+}
+
+.task-center-right {
+  flex: 1;
+  overflow: auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+}

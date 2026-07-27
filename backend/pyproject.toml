@@ -1,0 +1,46 @@
+[project]
+name = "bi-rule-engine"
+version = "1.0.0"
+description = "BI 数据处理规则引擎 — 企业级数据转换平台"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "aiomysql>=0.2.0",
+    "pymysql>=1.1.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "alembic>=1.14.0",
+    "polars>=1.18.0",
+    "lark>=1.2.0",
+    "redis[hiredis]>=5.2.0",
+    "celery>=5.4.0",
+    "python-multipart>=0.0.18",
+    "openpyxl>=3.1.0",
+    "xlsxwriter>=3.2.0",
+    "fastexcel>=0.12.0",
+    "cryptography>=44.0.0",
+    "loguru>=0.7.0",
+    "websockets>=13.0",
+    "sqlparse>=0.5.0",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.0",
+    "apscheduler>=3.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+    "requests>=2.32.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = {find = {where = ["."]}}
