@@ -100,3 +100,29 @@ def test_compile_formula_returns_expr():
     expr = compile_formula("a + b", ["a", "b"])
     df = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
     assert df.select(expr.alias("r"))["r"].to_list() == [4, 6]
+
+
+# ─── 边界：NOT / 混合优先级 / 错误信息 ──────────────────────────
+
+def test_not_operator():
+    df = pl.DataFrame({"x": [1, 2]})
+    assert evaluate_formula(df, "NOT (x = 1)").to_list() == [False, True]
+
+
+def test_mixed_and_or_precedence():
+    """AND 结合度高于 OR：(x>1 AND y=2) OR z=3。"""
+    df = pl.DataFrame({"x": [2, 2, 0], "y": [2, 0, 2], "z": [3, 0, 0]})
+    assert evaluate_formula(df, "x > 1 AND y = 2 OR z = 3").to_list() == [True, False, False]
+
+
+def test_unknown_function_raises():
+    df = pl.DataFrame({"x": [1]})
+    with pytest.raises(ValueError, match="未知函数"):
+        evaluate_formula(df, "FOO(x)")
+
+
+def test_parse_error_message():
+    df = pl.DataFrame({"x": [1]})
+    with pytest.raises(ValueError, match="公式语法错误"):
+        evaluate_formula(df, "IF(a, b")  # 括号不闭合
+
