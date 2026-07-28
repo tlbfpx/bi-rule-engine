@@ -122,7 +122,8 @@ function TargetTableDrawer({ open, onClose, initial }: { open: boolean; onClose:
   const isEdit = !!initial;
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
+    const values = await form.validateFields().catch(() => null);
+    if (!values) return; // 校验未通过，表单已显示字段错误
     if (isEdit) {
       updateTt.mutate({ id: initial!.id, data: values }, {
         onSuccess: () => { message.success('更新成功'); onClose(); },
@@ -135,7 +136,8 @@ function TargetTableDrawer({ open, onClose, initial }: { open: boolean; onClose:
   };
 
   const handleTest = async () => {
-    const values = await form.validateFields(['db_host', 'db_port', 'db_name', 'db_username', 'db_password']);
+    const values = await form.validateFields(['db_host', 'db_port', 'db_name', 'db_username', 'db_password']).catch(() => null);
+    if (!values) return; // 连接字段未填全
     testConn.mutate(values, {
       onSuccess: () => message.success('连接成功'),
     });

@@ -55,7 +55,8 @@ export default function RuleSetManager() {
   };
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
+    const values = await form.validateFields().catch(() => null);
+    if (!values) return; // 校验未通过，表单已显示字段错误
     const payload = { ...values, color: selectedColor };
     if (editing) {
       await updateRuleSet.mutateAsync({ id: editing.id, data: payload });

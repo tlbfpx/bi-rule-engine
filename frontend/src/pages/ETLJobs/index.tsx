@@ -224,7 +224,8 @@ function ETLJobDrawer({ open, onClose, initial }: { open: boolean; onClose: () =
   const ruleSetOptions = rsData?.items.map((rs) => ({ value: rs.id, label: rs.name })) || [];
 
   const handleSubmit = async () => {
-    const values = await form.validateFields();
+    const values = await form.validateFields().catch(() => null);
+    if (!values) return; // 校验未通过，表单已显示字段错误
     if (isEdit) {
       updateJob.mutate({ id: initial!.id, data: values }, {
         onSuccess: () => { message.success('更新成功'); onClose(); },
