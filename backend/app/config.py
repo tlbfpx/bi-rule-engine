@@ -52,10 +52,6 @@ class Settings(BaseSettings):
             )
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
-    # Celery
-    CELERY_BROKER_URL: str = ""
-    CELERY_RESULT_BACKEND: str = ""
-
     # 加密
     ENCRYPTION_KEY: str = "change-me-32-bytes-key-here!!"
 
@@ -110,6 +106,11 @@ class Settings(BaseSettings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         os.makedirs(self.LOG_DIR, exist_ok=True)
+        # 生产环境防护：拒绝使用默认加密密钥（否则数据源密码等用公开值加密，形同明文）
+        if self.ENVIRONMENT == "production" and self.ENCRYPTION_KEY == "change-me-32-bytes-key-here!!":
+            raise RuntimeError(
+                "生产环境必须设置 ENCRYPTION_KEY 环境变量（当前为默认值）"
+            )
 
 
 @lru_cache()

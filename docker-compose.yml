@@ -53,25 +53,6 @@ services:
         condition: service_healthy
     volumes: ["./backend:/app"]
 
-  celery-worker:
-    build: ./backend
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
-    environment:
-      - DB_HOST=mysql
-      - DB_PORT=3306
-      - DB_USER=bi_rule
-      - DB_PASSWORD=bi_rule_pass
-      - DB_NAME=bi_rule_engine
-      - REDIS_HOST=redis
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes: ["./backend:/app"]
-
 volumes:
   mysql_data:
   minio_data:

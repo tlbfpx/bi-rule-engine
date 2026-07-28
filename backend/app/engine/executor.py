@@ -4,7 +4,6 @@ import polars as pl
 from typing import Any
 from loguru import logger
 from app.engine.parser import RuleConfig, ConditionGroup
-from app.engine.compiler import compile_condition
 from app.engine.dependency import topological_sort
 
 

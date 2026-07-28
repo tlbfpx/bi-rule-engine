@@ -52,12 +52,15 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.bind(trace_id=trace_id).exception(
         f"未处理的异常: {request.method} {request.url.path}"
     )
+    # 生产环境不向客户端泄露内部异常细节（SQL/路径/库内部信息），仅返回通用提示 + trace_id
+    detail = (
+        "服务器内部错误"
+        if settings.ENVIRONMENT == "production"
+        else f"服务器内部错误: {exc}"
+    )
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": f"服务器内部错误: {str(exc)}",
-            "trace_id": trace_id,
-        },
+        content={"detail": detail, "trace_id": trace_id},
     )
 
 

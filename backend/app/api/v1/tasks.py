@@ -1,6 +1,5 @@
 """任务管理 API"""
 import os
-import time
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import FileResponse
@@ -11,11 +10,8 @@ import polars as pl
 
 from app.db import get_db
 from app.models.task import ExecutionTask
-from app.models.rule import Rule
-from app.models.lookup_table import LookupTable
 from app.schemas.task import TaskCreate
-from app.engine.parser import RuleParser
-from app.engine.executor import RuleExecutor
+from app.services.execution_service import execute_dataframe
 
 router = APIRouter()
 
@@ -54,40 +50,13 @@ async def upload_and_preview(file: UploadFile = File(...)):
 
 @router.post("/upload/execute")
 async def execute_upload_task(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    start_time = time.time()
+    """上传文件并对全部启用规则执行（业务逻辑见 services.execution_service）。"""
     content = await file.read()
     if file.filename and file.filename.endswith(".csv"):
         df = pl.read_csv(content)
     else:
         df = pl.read_excel(content)
-    input_rows = len(df)
-
-    rules_result = await db.execute(select(Rule).where(Rule.enabled == True).order_by(Rule.priority.asc()))
-    rules = rules_result.scalars().all()
-    lt_result = await db.execute(select(LookupTable))
-    lookup_tables = {str(t.id): t.data for t in lt_result.scalars().all()}
-
-    rule_configs = [RuleParser.parse(r.to_dict()) for r in rules]
-    executor = RuleExecutor(rule_configs, lookup_tables)
-    result_df, stats = executor.execute(df)
-
-    duration_ms = int((time.time() - start_time) * 1000)
-
-    task = ExecutionTask(
-        task_name=file.filename, status="completed",
-        input_rows=input_rows, output_rows=len(result_df),
-        stats=stats.to_dict(), duration_ms=duration_ms,
-    )
-    db.add(task)
-    await db.flush()
-    await db.refresh(task)
-
-    return {
-        "task_id": str(task.id), "status": "completed",
-        "input_rows": input_rows, "output_rows": len(result_df),
-        "error_rows": 0, "stats": stats.to_dict(), "duration_ms": duration_ms,
-        "preview_rows": result_df.head(20).to_dicts(), "columns": result_df.columns,
-    }
+    return await execute_dataframe(db, df, file.filename)
 
 
 @router.get("/{task_id}/status")
