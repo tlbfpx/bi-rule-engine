@@ -1,67 +1,102 @@
-"""测试公式引擎对 ar_balance 规则的处理"""
+"""公式引擎 (formula_engine) 表驱动测试。
+
+覆盖：IF/COALESCE/ROUND/算术、字符串函数、IS NULL / IN，
+以及 AND/OR 与比较运算符 (`=`/`>`/`<`...) 混用时的【优先级回归】。
+"""
 import polars as pl
+import pytest
 from app.engine.formula_engine import evaluate_formula, compile_formula
 
-# ─── 测试数据 ───────────────────────────────────────────
-df = pl.DataFrame({
-    "pay_amount": [1000.0, 500.0, None, 2000.0],
-    "sum_fin_ar": [800.0, 600.0, 100.0, None],
-})
 
-print("测试数据:")
-print(df)
-print()
+# ─── 基础：IF + 算术 + COALESCE ───────────────────────────────
 
-# ─── 测试 1: ar_balance 公式 ───────────────────────────
-formula = "IF(pay_amount > sum_fin_ar, COALESCE(pay_amount, 0) - sum_fin_ar, 0)"
+def test_if_gt_with_arithmetic():
+    df = pl.DataFrame({"pay_amount": [1000.0, 500.0, 200.0], "sum_fin_ar": [800.0, 600.0, 100.0]})
+    f = "IF(pay_amount > sum_fin_ar, pay_amount - sum_fin_ar, 0)"
+    assert evaluate_formula(df, f).to_list() == [200.0, 0.0, 100.0]
 
-print(f"公式: {formula}")
-print()
 
-try:
-    result = evaluate_formula(df, formula)
-    df_result = df.with_columns(result.alias("ar_balance"))
-    print("结果:")
-    print(df_result)
-    print()
+def test_coalesce_fills_null():
+    df = pl.DataFrame({"a": [1.0, None, 3.0], "b": [10.0, 20.0, None]})
+    # COALESCE(a, b) → a 非空取 a，否则 b
+    assert evaluate_formula(df, "COALESCE(a, b)").to_list() == [1.0, 20.0, 3.0]
 
-    # 验证
-    expected = [200.0, 0.0, -100.0, 0.0]
-    actual = df_result["ar_balance"].to_list()
-    for i, (e, a) in enumerate(zip(expected, actual)):
-        status = "✅" if abs((a or 0) - e) < 0.01 else "❌"
-        print(f"  Row {i}: expected={e}, actual={a} {status}")
 
-except Exception as e:
-    print(f"❌ 错误: {e}")
+def test_round():
+    df = pl.DataFrame({"x": [1.234, 2.5, 3.456]})
+    assert evaluate_formula(df, "ROUND(x, 2)").to_list() == [1.23, 2.5, 3.46]
 
-# ─── 测试 2: sum_fin_ar 公式 ───────────────────────────
-print("\n" + "="*50)
-print("测试 sum_fin_ar 公式:")
 
-df2 = pl.DataFrame({
-    "company_segment_code": ["930000", "840000", "970100", "972400"],
-    "sum_fin_rev": [1000.0, 2000.0, 3000.0, 4000.0],
-})
+def test_round_literal_value():
+    df = pl.DataFrame({"rev": [1000.0, 2000.0]})
+    # ROUND(rev * 1.06, 2)
+    assert evaluate_formula(df, "ROUND(rev * 1.06, 2)").to_list() == [1060.0, 2120.0]
 
-formula2 = "IF(company_segment_code.is_in(['930000', '840000']), sum_fin_rev, ROUND(sum_fin_rev * 1.06, 2))"
-print(f"公式: {formula2}")
 
-try:
-    result2 = evaluate_formula(df2, formula2)
-    df2_result = df2.with_columns(result2.alias("sum_fin_ar"))
-    print("结果:")
-    print(df2_result)
-except Exception as e:
-    print(f"❌ 错误: {e}")
-    # 尝试替代写法
-    print("\n尝试替代写法...")
-    alt = "IF((company_segment_code == '930000') | (company_segment_code == '840000'), sum_fin_rev, ROUND(sum_fin_rev * 1.06, 2))"
-    print(f"公式: {alt}")
-    try:
-        result2 = evaluate_formula(df2, alt)
-        df2_result = df2.with_columns(result2.alias("sum_fin_ar"))
-        print("结果:")
-        print(df2_result)
-    except Exception as e2:
-        print(f"❌ 替代也失败: {e2}")
+# ─── 字符串函数 ───────────────────────────────────────────────
+
+def test_split_takes_nth_part():
+    df = pl.DataFrame({"s": ["a-b-c-d-e-f", "1-2-3-4-5-6"]})
+    # SPLIT 第 6 段（1-indexed）；6 段字符串的第 6 段
+    assert evaluate_formula(df, "SPLIT(s, '-', 6)").to_list() == ["f", "6"]
+
+
+def test_contains_upper():
+    df = pl.DataFrame({"s": ["hello", "WORLD"]})
+    assert evaluate_formula(df, "CONTAINS(s, 'ell')").to_list() == [True, False]
+    assert evaluate_formula(df, "UPPER(s)").to_list() == ["HELLO", "WORLD"]
+
+
+# ─── IS NULL / IN ─────────────────────────────────────────────
+
+def test_is_null_and_is_not_null():
+    df = pl.DataFrame({"s": ["a", None, "c"]})
+    assert evaluate_formula(df, "s IS NULL").to_list() == [False, True, False]
+    assert evaluate_formula(df, "s IS NOT NULL").to_list() == [True, False, True]
+
+
+def test_in_list():
+    df = pl.DataFrame({"code": ["930000", "840000", "972400"]})
+    assert evaluate_formula(df, "code IN ('930000', '840000')").to_list() == [True, True, False]
+
+
+# ─── 优先级回归（核心 bug）─────────────────────────────────────
+# DSL 把 AND/OR→&/|、=→==，但 Python 里 & 优先级高于 ==，
+# 故 `A AND B = C` 会被解析成 `(A & B) == C`（bitand str 报错或语义错误）。
+
+def test_and_with_equality_no_parens():
+    """CONTAINS(...) AND field = 'x' 必须正确地先求等值、再 AND。"""
+    df = pl.DataFrame({
+        "eorder_name": ["盟宠-x", "好医-x", "z"],
+        "upd": ["平安健康", "平安健康", "其他"],
+    })
+    f = "CONTAINS(eorder_name, '盟宠') AND upd = '平安健康'"
+    assert evaluate_formula(df, f).to_list() == [True, False, False]
+
+
+def test_or_with_equality_no_parens():
+    df = pl.DataFrame({"x": [1, 2, 3], "y": [9, 9, 3]})
+    f = "x = 1 OR y = 3"
+    assert evaluate_formula(df, f).to_list() == [True, False, True]
+
+
+def test_if_nested_and_with_equality():
+    """IF 参数内的 `x = 1 AND y = 2` 同样要正确分组。"""
+    df = pl.DataFrame({"x": [1, 1, 2], "y": [2, 3, 2]})
+    f = "IF(x = 1 AND y = 2, 'match', 'no')"
+    assert evaluate_formula(df, f).to_list() == ["match", "no", "no"]
+
+
+def test_gt_with_and_arithmetic_operand():
+    """比较运算符左操作数含算术 + AND 组合。"""
+    df = pl.DataFrame({"a": [10.0, 5.0], "b": [3.0, 3.0], "c": [1, 2]})
+    f = "a - b > 5 AND c = 1"
+    assert evaluate_formula(df, f).to_list() == [True, False]  # row0: 7>5 & 1=1 → T ; row1: 2>5 → F
+
+
+# ─── compile_formula 返回 Expr ─────────────────────────────────
+
+def test_compile_formula_returns_expr():
+    expr = compile_formula("a + b", ["a", "b"])
+    df = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
+    assert df.select(expr.alias("r"))["r"].to_list() == [4, 6]

@@ -21,8 +21,110 @@
 - 字面量: 数字, '字符串', True/False, None
 """
 import re
+import io
+import tokenize
 import polars as pl
 from loguru import logger
+
+
+# 比较运算符（DSL `=` 已在预处理中转为 `==`）
+_CMP_OPS = {'==', '!=', '>=', '<=', '>', '<'}
+_OPEN_BRACKETS = {'(', '['}
+_CLOSE_BRACKETS = {')', ']'}
+
+
+def wrap_comparisons(expr: str) -> str:
+    """给每个比较子表达式 (a == b / a > b / ...) 加括号。
+
+    DSL 把 AND/OR → &/|、`=` → `==`，但 Python 中 `&`/`|` 优先级高于比较运算符，
+    导致 ``A AND B = C`` 被解析为 ``(A & B) == C``（bitand str 报错或语义错误）。
+    在 eval 前把每个比较子式括起来即可修正优先级，对任意深度（含 IF 参数内）生效。
+
+    用 tokenize 做括号/字符串感知的词法扫描，鲁棒且不依赖正则。
+    """
+    try:
+        meaningful = [
+            t for t in tokenize.generate_tokens(io.StringIO(expr).readline)
+            if t.type not in (
+                tokenize.NEWLINE, tokenize.NL, tokenize.COMMENT,
+                tokenize.ENCODING, tokenize.ENDMARKER,
+                tokenize.INDENT, tokenize.DEDENT,
+            )
+        ]
+    except tokenize.TokenizeError:
+        return expr  # 无法分词则原样返回，交给 eval 报原错误
+
+    wraps = []  # (start_offset, end_offset)
+    for k, tok in enumerate(meaningful):
+        if tok.type == tokenize.OP and tok.string in _CMP_OPS:
+            li = _operand_lhs(meaningful, k)
+            ri = _operand_rhs(meaningful, k)
+            if li is None or ri is None:
+                continue
+            wraps.append((meaningful[li].start[1], meaningful[ri].end[1]))
+
+    if not wraps:
+        return expr
+
+    # 去重重叠（比较不应重叠；保险）
+    wraps.sort()
+    dedup = []
+    last_end = -1
+    for s, e in wraps:
+        if s >= last_end:
+            dedup.append((s, e))
+            last_end = e
+
+    # 收集插入点（左括号在 start，右括号在 end），从右往左应用
+    inserts = []
+    for s, e in dedup:
+        inserts.append((s, '('))
+        inserts.append((e, ')'))
+    out = expr
+    for off, ch in sorted(inserts, key=lambda x: -x[0]):
+        out = out[:off] + ch + out[off:]
+    return out
+
+
+def _operand_lhs(toks, k):
+    """从比较运算符 toks[k] 向左扫描，返回左操作数最左 token 的 index。"""
+    depth = 0
+    i = k - 1
+    while i >= 0:
+        t = toks[i]
+        if t.type == tokenize.OP:
+            s = t.string
+            if s in _CLOSE_BRACKETS:
+                depth += 1
+            elif s in _OPEN_BRACKETS:
+                if depth == 0:
+                    return i + 1
+                depth -= 1
+            elif depth == 0 and (s in _CMP_OPS or s in ('&', '|', ',')):
+                return i + 1
+        i -= 1
+    return 0
+
+
+def _operand_rhs(toks, k):
+    """从比较运算符 toks[k] 向右扫描，返回右操作数最右 token 的 index。"""
+    depth = 0
+    i = k + 1
+    n = len(toks)
+    while i < n:
+        t = toks[i]
+        if t.type == tokenize.OP:
+            s = t.string
+            if s in _OPEN_BRACKETS:
+                depth += 1
+            elif s in _CLOSE_BRACKETS:
+                if depth == 0:
+                    return i - 1
+                depth -= 1
+            elif depth == 0 and (s in _CMP_OPS or s in ('&', '|', ',')):
+                return i - 1
+        i += 1
+    return n - 1
 
 
 def compile_formula(formula: str, columns: list[str]) -> pl.Expr:
@@ -178,6 +280,11 @@ def compile_formula(formula: str, columns: list[str]) -> pl.Expr:
     # 重要：在 eval 之前，需要将 = 替换为 ==（DSL 中 = 表示相等比较）
     # 避免单 = 被 Python 解析为赋值语句
     expr = re.sub(r'(?<![=!<>])=(?!=)', '==', expr)
+
+    # 比较子式加括号：修正 AND/OR(→&/|) 与比较运算符的优先级
+    # （Python 中 & 优先级高于 ==，故 `A AND B = C` 会被误解析为 `(A & B) == C`）
+    expr = wrap_comparisons(expr)
+
     local_env = {
         "pl": pl,
         "NULL": None,

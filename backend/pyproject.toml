@@ -42,5 +42,10 @@ dev = [
 requires = ["setuptools>=75.0.0"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+
 [tool.setuptools]
 packages = {find = {where = ["."]}}
