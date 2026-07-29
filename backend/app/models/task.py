@@ -32,24 +32,3 @@ class ExecutionTask(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "task_name": self.task_name,
-            "source_id": self.source_id,
-            "template_id": self.template_id,
-            "query_params": self.query_params,
-            "status": self.status,
-            "output_format": self.output_format,
-            "output_file": self.output_file,
-            "input_rows": self.input_rows,
-            "output_rows": self.output_rows,
-            "error_rows": self.error_rows,
-            "stats": self.stats,
-            "duration_ms": self.duration_ms,
-            "created_by": self.created_by,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }

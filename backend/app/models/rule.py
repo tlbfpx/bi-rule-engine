@@ -31,21 +31,3 @@ class Rule(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
-
-    def to_dict(self) -> dict:
-        return {
-            "id": self.id,
-            "rule_set_id": self.rule_set_id,
-            "field_name": self.field_name,
-            "field_label": self.field_label,
-            "rule_type": self.rule_type,
-            "priority": self.priority,
-            "enabled": self.enabled,
-            "config": self.config if isinstance(self.config, dict) else {},
-            "lookup_table_id": self.lookup_table_id,
-            "depends_on": self.depends_on or [],
-            "description": self.description,
-            "created_by": self.created_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }

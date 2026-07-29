@@ -19,7 +19,7 @@ async def test_rule(db: AsyncSession, rule_id: str, test_rows: list[dict]) -> di
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
-    rule_config = RuleParser.parse(rule.to_dict())
+    rule_config = RuleParser.parse_rule(rule)
 
     # 构建测试 DataFrame：补全缺失的列（cleaning 目标列 / computed 依赖列和输出列）
     df = pl.DataFrame(test_rows)

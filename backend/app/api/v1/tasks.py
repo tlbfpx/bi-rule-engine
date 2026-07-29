@@ -66,7 +66,7 @@ async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    return task.to_dict()
+    return task
 
 
 @router.get("/{task_id}/download")
@@ -99,7 +99,7 @@ async def list_tasks(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     tasks = result.scalars().all()
-    return {"items": [t.to_dict() for t in tasks], "total": total, "page": page, "page_size": page_size}
+    return {"items": tasks, "total": total, "page": page, "page_size": page_size}
 
 
 @router.delete("/{task_id}")

@@ -261,7 +261,7 @@ async def _load_rules_and_lookup(session: AsyncSession, rule_set_id: str | None 
     rules = rule_result.scalars().all()
     lt_result = await session.execute(select(LookupTable))
     lookup_tables = {str(t.id): t.data for t in lt_result.scalars().all()}
-    rule_configs = [RuleParser.parse(r.to_dict()) for r in rules]
+    rule_configs = [RuleParser.parse_rule(r) for r in rules]
     return rule_configs, lookup_tables
 
 

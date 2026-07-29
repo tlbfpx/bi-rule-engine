@@ -1,4 +1,5 @@
 """ETL 调度任务 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from app.schemas.data_source import DataSourceOut
@@ -37,12 +38,12 @@ class ETLJobUpdate(BaseModel):
 
 class ETLJobOut(ETLJobBase):
     id: str
-    last_run_at: Optional[str] = None
+    last_run_at: Optional[datetime] = None
     last_run_status: Optional[str] = None
     last_run_error: Optional[str] = None
-    created_at: str
-    updated_at: str
-    # include_relations=True 时由 to_dict 嵌套；list/get 端点必带（前端读 .name）
+    created_at: datetime
+    updated_at: datetime
+    # list/get/put/toggle 端点由 ORM 关系（lazy=selectin）自动嵌套；前端读 .name
     data_source: Optional[DataSourceOut] = None
     target_table: Optional[TargetTableOut] = None
 
@@ -54,8 +55,8 @@ class ETLJobRunOut(BaseModel):
     id: str
     etl_job_id: str
     status: str
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     duration_ms: Optional[int] = None
     input_rows: Optional[int] = None
     output_rows: Optional[int] = None
@@ -64,8 +65,8 @@ class ETLJobRunOut(BaseModel):
     error_log: dict = {}
     stats: dict = {}
     trace_id: Optional[str] = None
-    created_at: str
-    # include_job=True 时由 to_dict 嵌套；runs 端点必带（前端读 .job_name）
+    created_at: datetime
+    # runs 端点由 ORM 关系自动嵌套；前端读 .job_name
     etl_job: Optional[ETLJobOut] = None
 
     class Config:

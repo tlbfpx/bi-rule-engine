@@ -1,4 +1,5 @@
 """任务 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -12,7 +13,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskOut(BaseModel):
-    """ExecutionTask 响应。字段与 ExecutionTask.to_dict() 一一对应（不含 error_log）。"""
+    """ExecutionTask 响应（不含 error_log 列）。"""
     id: str
     task_name: Optional[str] = None
     source_id: Optional[str] = None
@@ -27,6 +28,6 @@ class TaskOut(BaseModel):
     stats: dict = Field(default_factory=dict)
     duration_ms: Optional[int] = None
     created_by: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    created_at: str
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime

@@ -46,7 +46,7 @@ async def create_etl_job(body: ETLJobCreate, db: AsyncSession = Depends(get_db))
         await scheduler_manager.add_job(job)
 
     logger.info(f"创建 ETL 任务: {job.job_name}")
-    return job.to_dict()
+    return job
 
 
 @router.get("", response_model=Page[ETLJobOut])
@@ -62,7 +62,7 @@ async def list_etl_jobs(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    return {"items": [job.to_dict(include_relations=True) for job in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/runs/{run_id}", response_model=ETLJobRunOut)
@@ -71,7 +71,7 @@ async def get_etl_job_run(run_id: str, db: AsyncSession = Depends(get_db)):
     run = result.scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="执行记录不存在")
-    return run.to_dict(include_job=True)
+    return run
 
 
 @router.get("/runs", response_model=Page[ETLJobRunOut])
@@ -92,7 +92,7 @@ async def list_all_etl_job_runs(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    return {"items": [r.to_dict(include_job=True) for r in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/{job_id}", response_model=ETLJobOut)
@@ -101,7 +101,7 @@ async def get_etl_job(job_id: str, db: AsyncSession = Depends(get_db)):
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="ETL 任务不存在")
-    return job.to_dict(include_relations=True)
+    return job
 
 
 @router.put("/{job_id}", response_model=ETLJobOut)
@@ -125,7 +125,7 @@ async def update_etl_job(job_id: str, body: ETLJobUpdate, db: AsyncSession = Dep
     await scheduler_manager.reschedule_job(job)
 
     logger.info(f"更新 ETL 任务: {job.job_name}")
-    return job.to_dict(include_relations=True)
+    return job
 
 
 @router.delete("/{job_id}")
@@ -183,7 +183,7 @@ async def toggle_etl_job(job_id: str, enabled: bool, db: AsyncSession = Depends(
         await scheduler_manager.remove_job(job_id)
 
     logger.info(f"{'启用' if enabled else '停用'} ETL 任务: {job.job_name}")
-    return job.to_dict(include_relations=True)
+    return job
 
 
 @router.get("/{job_id}/runs", response_model=Page[ETLJobRunOut])
@@ -200,5 +200,5 @@ async def list_etl_job_runs(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    return {"items": [r.to_dict() for r in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 

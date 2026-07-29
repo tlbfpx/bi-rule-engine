@@ -87,3 +87,19 @@ class RuleParser:
             depends_on=rule_dict.get("depends_on", []),
             description=rule_dict.get("description", ""),
         )
+
+    @staticmethod
+    def parse_rule(rule) -> RuleConfig:
+        """从 ORM Rule 对象解析（取代 rule.to_dict() 喂给 parse()）。"""
+        return RuleParser.parse({
+            "rule_id": str(rule.id) if rule.id else "",
+            "field_name": rule.field_name,
+            "field_label": rule.field_label,
+            "rule_type": rule.rule_type,
+            "priority": rule.priority,
+            "enabled": rule.enabled,
+            "config": rule.config if isinstance(rule.config, dict) else {},
+            "lookup_table_id": rule.lookup_table_id,
+            "depends_on": rule.depends_on or [],
+            "description": rule.description,
+        })

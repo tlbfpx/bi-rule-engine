@@ -42,27 +42,3 @@ class ETLJob(Base):
 
     data_source: Mapped["DataSource"] = relationship("DataSource", lazy="selectin")
     target_table: Mapped["TargetTable"] = relationship("TargetTable", lazy="selectin")
-
-    def to_dict(self, include_relations: bool = False) -> dict:
-        data = {
-            "id": self.id,
-            "job_name": self.job_name,
-            "description": self.description,
-            "enabled": self.enabled,
-            "data_source_id": self.data_source_id,
-            "target_table_id": self.target_table_id,
-            "rule_set_id": self.rule_set_id,
-            "cron_expression": self.cron_expression,
-            "timezone": self.timezone,
-            "error_retry_count": self.error_retry_count,
-            "timeout_seconds": self.timeout_seconds,
-            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
-            "last_run_status": self.last_run_status,
-            "last_run_error": self.last_run_error,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
-        if include_relations:
-            data["data_source"] = self.data_source.to_dict() if self.data_source else None
-            data["target_table"] = self.target_table.to_dict() if self.target_table else None
-        return data

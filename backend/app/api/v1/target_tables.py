@@ -51,7 +51,7 @@ async def create_target_table(body: TargetTableCreate, db: AsyncSession = Depend
     await db.flush()
     await db.refresh(tt)
     logger.info(f"创建目标表配置: {tt.name}")
-    return tt.to_dict()
+    return tt
 
 
 @router.get("", response_model=Page[TargetTableOut])
@@ -67,7 +67,7 @@ async def list_target_tables(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    return {"items": [tt.to_dict() for tt in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/all")
@@ -83,7 +83,7 @@ async def get_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
     tt = result.scalar_one_or_none()
     if not tt:
         raise HTTPException(status_code=404, detail="目标表配置不存在")
-    return tt.to_dict()
+    return tt
 
 
 @router.put("/{tt_id}", response_model=TargetTableOut)
@@ -108,7 +108,7 @@ async def update_target_table(tt_id: str, body: TargetTableUpdate, db: AsyncSess
     await db.flush()
     await db.refresh(tt)
     logger.info(f"更新目标表配置: {tt.name}")
-    return tt.to_dict()
+    return tt
 
 
 @router.delete("/{tt_id}")

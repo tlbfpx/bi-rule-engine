@@ -1,4 +1,5 @@
 """映射表 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -26,5 +27,5 @@ class LookupTableOut(BaseModel):
     columns: dict = Field(default_factory=dict)
     data: dict = Field(default_factory=dict)
     row_count: int = 0
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime

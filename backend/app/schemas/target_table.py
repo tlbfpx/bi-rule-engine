@@ -1,4 +1,5 @@
 """目标表 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
@@ -38,8 +39,8 @@ class TargetTableUpdate(BaseModel):
 
 class TargetTableOut(TargetTableBase):
     id: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

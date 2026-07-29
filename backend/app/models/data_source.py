@@ -43,25 +43,3 @@ class DataSource(Base):
     @db_password.setter
     def db_password(self, value: str):
         self._db_password = encrypt(value)
-
-    def to_dict(self, include_password: bool = False) -> dict:
-        data = {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "enabled": self.enabled,
-            "db_host": self.db_host,
-            "db_port": self.db_port,
-            "db_name": self.db_name,
-            "db_username": self.db_username,
-            "extract_mode": self.extract_mode,
-            "extract_sql": self.extract_sql,
-            "extract_table": self.extract_table,
-            "incremental_column": self.incremental_column,
-            "incremental_value": self.incremental_value,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
-        if include_password:
-            data["db_password"] = self.db_password
-        return data

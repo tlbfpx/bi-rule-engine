@@ -30,7 +30,7 @@ async def execute_dataframe(
     lt_result = await db.execute(select(LookupTable))
     lookup_tables = {str(t.id): t.data for t in lt_result.scalars().all()}
 
-    rule_configs = [RuleParser.parse(r.to_dict()) for r in rules]
+    rule_configs = [RuleParser.parse_rule(r) for r in rules]
     executor = RuleExecutor(rule_configs, lookup_tables)
     result_df, stats = executor.execute(df)
 

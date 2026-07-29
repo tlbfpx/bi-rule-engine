@@ -1,4 +1,5 @@
 """规则集管理 API"""
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,8 +40,8 @@ class RuleSetOut(BaseModel):
     sort_order: int
     enabled: bool
     rule_count: int | None = None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
 
 # ── Routes ──
@@ -62,13 +63,12 @@ async def list_rule_sets(
     )
     items = []
     for rs in result.scalars().all():
-        d = rs.to_dict()
-        # 统计规则数量
+        # 统计规则数量，作为动态属性附在 ORM 实例上由 RuleSetOut 序列化
         cnt = await db.execute(
             select(func.count(Rule.id)).where(Rule.rule_set_id == rs.id)
         )
-        d["rule_count"] = cnt.scalar()
-        items.append(d)
+        rs.rule_count = cnt.scalar()
+        items.append(rs)
 
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
@@ -83,12 +83,11 @@ async def list_all_rule_sets(db: AsyncSession = Depends(get_db)):
     )
     items = []
     for rs in result.scalars().all():
-        d = rs.to_dict()
         cnt = await db.execute(
             select(func.count(Rule.id)).where(Rule.rule_set_id == rs.id)
         )
-        d["rule_count"] = cnt.scalar()
-        items.append(d)
+        rs.rule_count = cnt.scalar()
+        items.append(rs)
     return {"items": items}
 
 
@@ -98,12 +97,11 @@ async def get_rule_set(rs_id: str, db: AsyncSession = Depends(get_db)):
     rs = result.scalar_one_or_none()
     if not rs:
         raise HTTPException(status_code=404, detail="规则集不存在")
-    d = rs.to_dict()
     cnt = await db.execute(
         select(func.count(Rule.id)).where(Rule.rule_set_id == rs.id)
     )
-    d["rule_count"] = cnt.scalar()
-    return d
+    rs.rule_count = cnt.scalar()
+    return rs
 
 
 @router.post("", status_code=201, response_model=RuleSetOut)
@@ -122,7 +120,7 @@ async def create_rule_set(body: RuleSetCreate, db: AsyncSession = Depends(get_db
     db.add(rs)
     await db.commit()
     await db.refresh(rs)
-    return rs.to_dict()
+    return rs
 
 
 @router.put("/{rs_id}", response_model=RuleSetOut)
@@ -152,7 +150,7 @@ async def update_rule_set(
 
     await db.commit()
     await db.refresh(rs)
-    return rs.to_dict()
+    return rs
 
 
 @router.delete("/{rs_id}")

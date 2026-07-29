@@ -1,4 +1,5 @@
 """规则 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 
@@ -78,5 +79,5 @@ class RuleOut(BaseModel):
     description: Optional[str] = None
     created_by: Optional[str] = None
     rule_set_name: Optional[str] = None  # 仅 list 端点由路由注入
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime

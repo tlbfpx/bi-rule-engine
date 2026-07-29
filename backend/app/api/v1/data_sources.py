@@ -52,7 +52,7 @@ async def create_data_source(body: DataSourceCreate, db: AsyncSession = Depends(
     await db.flush()
     await db.refresh(ds)
     logger.info(f"创建数据源: {ds.name}")
-    return ds.to_dict()
+    return ds
 
 
 @router.get("", response_model=Page[DataSourceOut])
@@ -68,7 +68,7 @@ async def list_data_sources(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     items = result.scalars().all()
-    return {"items": [ds.to_dict() for ds in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/all")
@@ -85,7 +85,7 @@ async def get_data_source(ds_id: str, db: AsyncSession = Depends(get_db)):
     ds = result.scalar_one_or_none()
     if not ds:
         raise HTTPException(status_code=404, detail="数据源不存在")
-    return ds.to_dict()
+    return ds
 
 
 @router.put("/{ds_id}", response_model=DataSourceOut)
@@ -110,7 +110,7 @@ async def update_data_source(ds_id: str, body: DataSourceUpdate, db: AsyncSessio
     await db.flush()
     await db.refresh(ds)
     logger.info(f"更新数据源: {ds.name}")
-    return ds.to_dict()
+    return ds
 
 
 @router.delete("/{ds_id}")

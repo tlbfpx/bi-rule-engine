@@ -30,7 +30,7 @@ async def list_lookup_tables(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     tables = result.scalars().all()
-    return {"items": [t.to_dict() for t in tables], "total": total, "page": page, "page_size": page_size}
+    return {"items": tables, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("", status_code=201, response_model=LookupTableOut)
@@ -44,7 +44,7 @@ async def create_lookup_table(body: LookupTableCreate, db: AsyncSession = Depend
     await db.flush()
     await db.refresh(table)
     logger.info(f"创建映射表: {table.name} ({table.row_count} 行)")
-    return table.to_dict()
+    return table
 
 
 @router.post("/upload", status_code=201, response_model=LookupTableOut)
@@ -69,7 +69,7 @@ async def upload_lookup_table(
     await db.flush()
     await db.refresh(table)
     logger.info(f"上传映射表: {table.name} ({table.row_count} 行)")
-    return table.to_dict()
+    return table
 
 
 @router.get("/{table_id}", response_model=LookupTableOut)
@@ -78,7 +78,7 @@ async def get_lookup_table(table_id: str, db: AsyncSession = Depends(get_db)):
     table = result.scalar_one_or_none()
     if not table:
         raise HTTPException(status_code=404, detail="映射表不存在")
-    return table.to_dict()
+    return table
 
 
 @router.put("/{table_id}", response_model=LookupTableOut)
@@ -94,7 +94,7 @@ async def update_lookup_table(table_id: str, body: LookupTableUpdate, db: AsyncS
         table.row_count = len(update_data["data"])
     await db.flush()
     await db.refresh(table)
-    return table.to_dict()
+    return table
 
 
 @router.delete("/{table_id}", status_code=204)

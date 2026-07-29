@@ -35,24 +35,3 @@ class ETLJobRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     etl_job: Mapped["ETLJob"] = relationship("ETLJob", lazy="selectin")
-
-    def to_dict(self, include_job: bool = False) -> dict:
-        data = {
-            "id": self.id,
-            "etl_job_id": self.etl_job_id,
-            "status": self.status,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "duration_ms": self.duration_ms,
-            "input_rows": self.input_rows,
-            "output_rows": self.output_rows,
-            "error_rows": self.error_rows,
-            "executed_sql": self.executed_sql,
-            "error_log": self.error_log,
-            "stats": self.stats,
-            "trace_id": self.trace_id,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-        if include_job:
-            data["etl_job"] = self.etl_job.to_dict() if self.etl_job else None
-        return data

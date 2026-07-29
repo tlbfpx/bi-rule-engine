@@ -52,13 +52,11 @@ async def list_rules(
         for rs in rs_result.scalars().all():
             rule_set_names[rs.id] = rs.name
 
-    items = []
+    # 把规则集名作为动态属性附在 ORM 实例上，由 response_model(RuleOut) 序列化
     for r in rules:
-        d = r.to_dict()
-        d["rule_set_name"] = rule_set_names.get(r.rule_set_id)
-        items.append(d)
+        r.rule_set_name = rule_set_names.get(r.rule_set_id)
 
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    return {"items": rules, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("", status_code=201, response_model=RuleOut)
@@ -74,7 +72,7 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
     await db.flush()
     await db.refresh(rule)
     logger.info(f"创建规则: {rule.field_name} ({rule.rule_type})")
-    return rule.to_dict()
+    return rule
 
 
 @router.put("/batch-priority")
@@ -94,7 +92,7 @@ async def get_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     rule = result.scalar_one_or_none()
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
-    return rule.to_dict()
+    return rule
 
 
 @router.put("/{rule_id}", response_model=RuleOut)
@@ -111,7 +109,7 @@ async def update_rule(rule_id: str, body: RuleUpdate, db: AsyncSession = Depends
     await db.flush()
     await db.refresh(rule)
     logger.info(f"更新规则: {rule.field_name}")
-    return rule.to_dict()
+    return rule
 
 
 @router.delete("/{rule_id}", status_code=204)

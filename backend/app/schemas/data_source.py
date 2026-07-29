@@ -1,4 +1,5 @@
 """数据源 Pydantic Schema"""
+from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
@@ -47,8 +48,8 @@ class DataSourceUpdate(BaseModel):
 
 class DataSourceOut(DataSourceBase):
     id: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

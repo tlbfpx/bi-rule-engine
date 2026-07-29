@@ -42,24 +42,3 @@ class TargetTable(Base):
     @db_password.setter
     def db_password(self, value: str):
         self._db_password = encrypt(value)
-
-    def to_dict(self, include_password: bool = False) -> dict:
-        data = {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "enabled": self.enabled,
-            "db_host": self.db_host,
-            "db_port": self.db_port,
-            "db_name": self.db_name,
-            "db_username": self.db_username,
-            "table_name": self.table_name,
-            "write_mode": self.write_mode,
-            "upsert_keys": self.upsert_keys,
-            "auto_create_table": self.auto_create_table,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
-        if include_password:
-            data["db_password"] = self.db_password
-        return data
