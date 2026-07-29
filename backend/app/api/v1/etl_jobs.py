@@ -8,6 +8,7 @@ from app.db import get_db
 from app.models.etl_job import ETLJob
 from app.models.etl_job_run import ETLJobRun
 from app.schemas.etl_job import ETLJobCreate, ETLJobUpdate, ETLJobOut, ETLJobRunOut
+from app.schemas.common import Page
 from app.engine.etl_runner import run_etl_job
 from app.tasks.scheduler import scheduler_manager
 
@@ -20,7 +21,7 @@ def _is_valid_cron(cron: str) -> bool:
     return len(parts) == 5
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=ETLJobOut)
 async def create_etl_job(body: ETLJobCreate, db: AsyncSession = Depends(get_db)):
     if not _is_valid_cron(body.cron_expression):
         raise HTTPException(status_code=400, detail="cron 表达式格式错误，需要 5 个字段（分 时 日 月 周）")
@@ -48,7 +49,7 @@ async def create_etl_job(body: ETLJobCreate, db: AsyncSession = Depends(get_db))
     return job.to_dict()
 
 
-@router.get("")
+@router.get("", response_model=Page[ETLJobOut])
 async def list_etl_jobs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
@@ -64,7 +65,7 @@ async def list_etl_jobs(
     return {"items": [job.to_dict(include_relations=True) for job in items], "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/runs/{run_id}")
+@router.get("/runs/{run_id}", response_model=ETLJobRunOut)
 async def get_etl_job_run(run_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ETLJobRun).where(ETLJobRun.id == run_id))
     run = result.scalar_one_or_none()
@@ -73,7 +74,7 @@ async def get_etl_job_run(run_id: str, db: AsyncSession = Depends(get_db)):
     return run.to_dict(include_job=True)
 
 
-@router.get("/runs")
+@router.get("/runs", response_model=Page[ETLJobRunOut])
 async def list_all_etl_job_runs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
@@ -94,7 +95,7 @@ async def list_all_etl_job_runs(
     return {"items": [r.to_dict(include_job=True) for r in items], "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/{job_id}")
+@router.get("/{job_id}", response_model=ETLJobOut)
 async def get_etl_job(job_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ETLJob).where(ETLJob.id == job_id))
     job = result.scalar_one_or_none()
@@ -103,7 +104,7 @@ async def get_etl_job(job_id: str, db: AsyncSession = Depends(get_db)):
     return job.to_dict(include_relations=True)
 
 
-@router.put("/{job_id}")
+@router.put("/{job_id}", response_model=ETLJobOut)
 async def update_etl_job(job_id: str, body: ETLJobUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ETLJob).where(ETLJob.id == job_id))
     job = result.scalar_one_or_none()
@@ -165,7 +166,7 @@ async def run_etl_job_manual(
     return {"run_id": str(run_record.id), "status": "pending"}
 
 
-@router.post("/{job_id}/toggle")
+@router.post("/{job_id}/toggle", response_model=ETLJobOut)
 async def toggle_etl_job(job_id: str, enabled: bool, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ETLJob).where(ETLJob.id == job_id))
     job = result.scalar_one_or_none()
@@ -185,7 +186,7 @@ async def toggle_etl_job(job_id: str, enabled: bool, db: AsyncSession = Depends(
     return job.to_dict(include_relations=True)
 
 
-@router.get("/{job_id}/runs")
+@router.get("/{job_id}/runs", response_model=Page[ETLJobRunOut])
 async def list_etl_job_runs(
     job_id: str,
     page: int = Query(1, ge=1),

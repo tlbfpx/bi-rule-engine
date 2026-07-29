@@ -9,6 +9,7 @@ from loguru import logger
 from app.db import get_db
 from app.models.target_table import TargetTable
 from app.schemas.target_table import TargetTableCreate, TargetTableUpdate, TargetTableOut, TargetTableTestRequest
+from app.schemas.common import Page
 
 router = APIRouter()
 
@@ -26,7 +27,7 @@ def _test_db_connection(host: str, port: int, database: str, username: str, pass
         return False
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=TargetTableOut)
 async def create_target_table(body: TargetTableCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(TargetTable).where(TargetTable.name == body.name))
     if existing.scalar_one_or_none():
@@ -53,7 +54,7 @@ async def create_target_table(body: TargetTableCreate, db: AsyncSession = Depend
     return tt.to_dict()
 
 
-@router.get("")
+@router.get("", response_model=Page[TargetTableOut])
 async def list_target_tables(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
@@ -76,7 +77,7 @@ async def list_all_target_tables(db: AsyncSession = Depends(get_db)):
     return {"items": [{"id": tt.id, "name": tt.name, "table_name": tt.table_name, "enabled": tt.enabled} for tt in items]}
 
 
-@router.get("/{tt_id}")
+@router.get("/{tt_id}", response_model=TargetTableOut)
 async def get_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()
@@ -85,7 +86,7 @@ async def get_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
     return tt.to_dict()
 
 
-@router.put("/{tt_id}")
+@router.put("/{tt_id}", response_model=TargetTableOut)
 async def update_target_table(tt_id: str, body: TargetTableUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()

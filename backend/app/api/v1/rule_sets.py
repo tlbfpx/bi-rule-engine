@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
+from app.schemas.common import Page, ItemsResponse
 from app.models.rule_set import RuleSet
 from app.models.rule import Rule
 from app.models.etl_job import ETLJob
@@ -29,9 +30,22 @@ class RuleSetUpdate(BaseModel):
     enabled: bool | None = None
 
 
+class RuleSetOut(BaseModel):
+    """规则集响应；rule_count 由路由在 list/all/get 注入。"""
+    id: str
+    name: str
+    description: str | None = None
+    color: str
+    sort_order: int
+    enabled: bool
+    rule_count: int | None = None
+    created_at: str
+    updated_at: str
+
+
 # ── Routes ──
 
-@router.get("")
+@router.get("", response_model=Page[RuleSetOut])
 async def list_rule_sets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -59,7 +73,7 @@ async def list_rule_sets(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/all")
+@router.get("/all", response_model=ItemsResponse[RuleSetOut])
 async def list_all_rule_sets(db: AsyncSession = Depends(get_db)):
     """返回所有启用的规则集（下拉选择用）"""
     result = await db.execute(
@@ -78,7 +92,7 @@ async def list_all_rule_sets(db: AsyncSession = Depends(get_db)):
     return {"items": items}
 
 
-@router.get("/{rs_id}")
+@router.get("/{rs_id}", response_model=RuleSetOut)
 async def get_rule_set(rs_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(RuleSet).where(RuleSet.id == rs_id))
     rs = result.scalar_one_or_none()
@@ -92,7 +106,7 @@ async def get_rule_set(rs_id: str, db: AsyncSession = Depends(get_db)):
     return d
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=RuleSetOut)
 async def create_rule_set(body: RuleSetCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(RuleSet).where(RuleSet.name == body.name))
     if existing.scalar_one_or_none():
@@ -111,7 +125,7 @@ async def create_rule_set(body: RuleSetCreate, db: AsyncSession = Depends(get_db
     return rs.to_dict()
 
 
-@router.put("/{rs_id}")
+@router.put("/{rs_id}", response_model=RuleSetOut)
 async def update_rule_set(
     rs_id: str, body: RuleSetUpdate, db: AsyncSession = Depends(get_db)
 ):

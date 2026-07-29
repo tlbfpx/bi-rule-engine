@@ -61,3 +61,22 @@ class RuleTestRequest(BaseModel):
 
 class BatchPriorityUpdate(BaseModel):
     items: list[dict]
+
+
+class RuleOut(BaseModel):
+    """规则响应。config 等半结构化字段用宽松类型，避免深度校验触发 500。"""
+    id: str
+    rule_set_id: Optional[str] = None
+    field_name: str
+    field_label: Optional[str] = None
+    rule_type: str
+    priority: int
+    enabled: bool
+    config: dict = Field(default_factory=dict)
+    lookup_table_id: Optional[str] = None
+    depends_on: list = Field(default_factory=list)
+    description: Optional[str] = None
+    created_by: Optional[str] = None
+    rule_set_name: Optional[str] = None  # 仅 list 端点由路由注入
+    created_at: str
+    updated_at: str

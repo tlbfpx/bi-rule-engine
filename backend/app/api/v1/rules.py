@@ -6,13 +6,14 @@ from loguru import logger
 
 from app.db import get_db
 from app.models.rule import Rule
-from app.schemas.rule import RuleCreate, RuleUpdate, RuleTestRequest, BatchPriorityUpdate
+from app.schemas.rule import RuleCreate, RuleUpdate, RuleTestRequest, BatchPriorityUpdate, RuleOut
+from app.schemas.common import Page
 from app.services.rule_service import test_rule as run_rule_test
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=Page[RuleOut])
 async def list_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
@@ -60,7 +61,7 @@ async def list_rules(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=RuleOut)
 async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
     rule = Rule(
         rule_set_id=body.rule_set_id,
@@ -87,7 +88,7 @@ async def batch_update_priority(body: BatchPriorityUpdate, db: AsyncSession = De
     return {"message": "ok", "count": len(body.items)}
 
 
-@router.get("/{rule_id}")
+@router.get("/{rule_id}", response_model=RuleOut)
 async def get_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).where(Rule.id == rule_id))
     rule = result.scalar_one_or_none()
@@ -96,7 +97,7 @@ async def get_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     return rule.to_dict()
 
 
-@router.put("/{rule_id}")
+@router.put("/{rule_id}", response_model=RuleOut)
 async def update_rule(rule_id: str, body: RuleUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).where(Rule.id == rule_id))
     rule = result.scalar_one_or_none()

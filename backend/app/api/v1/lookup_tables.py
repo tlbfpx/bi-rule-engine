@@ -7,12 +7,13 @@ import polars as pl
 
 from app.db import get_db
 from app.models.lookup_table import LookupTable
-from app.schemas.lookup_table import LookupTableCreate, LookupTableUpdate
+from app.schemas.lookup_table import LookupTableCreate, LookupTableUpdate, LookupTableOut
+from app.schemas.common import Page
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=Page[LookupTableOut])
 async def list_lookup_tables(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -32,7 +33,7 @@ async def list_lookup_tables(
     return {"items": [t.to_dict() for t in tables], "total": total, "page": page, "page_size": page_size}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=LookupTableOut)
 async def create_lookup_table(body: LookupTableCreate, db: AsyncSession = Depends(get_db)):
     table = LookupTable(
         name=body.name, description=body.description,
@@ -46,7 +47,7 @@ async def create_lookup_table(body: LookupTableCreate, db: AsyncSession = Depend
     return table.to_dict()
 
 
-@router.post("/upload", status_code=201)
+@router.post("/upload", status_code=201, response_model=LookupTableOut)
 async def upload_lookup_table(
     name: str = Query(...),
     file: UploadFile = File(...),
@@ -71,7 +72,7 @@ async def upload_lookup_table(
     return table.to_dict()
 
 
-@router.get("/{table_id}")
+@router.get("/{table_id}", response_model=LookupTableOut)
 async def get_lookup_table(table_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(LookupTable).where(LookupTable.id == table_id))
     table = result.scalar_one_or_none()
@@ -80,7 +81,7 @@ async def get_lookup_table(table_id: str, db: AsyncSession = Depends(get_db)):
     return table.to_dict()
 
 
-@router.put("/{table_id}")
+@router.put("/{table_id}", response_model=LookupTableOut)
 async def update_lookup_table(table_id: str, body: LookupTableUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(LookupTable).where(LookupTable.id == table_id))
     table = result.scalar_one_or_none()

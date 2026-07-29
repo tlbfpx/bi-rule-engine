@@ -1,6 +1,8 @@
 """ETL 调度任务 Pydantic Schema"""
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from app.schemas.data_source import DataSourceOut
+from app.schemas.target_table import TargetTableOut
 
 
 class ETLJobBase(BaseModel):
@@ -40,6 +42,9 @@ class ETLJobOut(ETLJobBase):
     last_run_error: Optional[str] = None
     created_at: str
     updated_at: str
+    # include_relations=True 时由 to_dict 嵌套；list/get 端点必带（前端读 .name）
+    data_source: Optional[DataSourceOut] = None
+    target_table: Optional[TargetTableOut] = None
 
     class Config:
         from_attributes = True
@@ -58,7 +63,10 @@ class ETLJobRunOut(BaseModel):
     executed_sql: Optional[str] = None
     error_log: dict = {}
     stats: dict = {}
+    trace_id: Optional[str] = None
     created_at: str
+    # include_job=True 时由 to_dict 嵌套；runs 端点必带（前端读 .job_name）
+    etl_job: Optional[ETLJobOut] = None
 
     class Config:
         from_attributes = True

@@ -8,6 +8,7 @@ from loguru import logger
 from app.db import get_db
 from app.models.data_source import DataSource
 from app.schemas.data_source import DataSourceCreate, DataSourceUpdate, DataSourceOut, DataSourceTestRequest
+from app.schemas.common import Page
 from app.utils.crypto import encrypt
 
 router = APIRouter()
@@ -26,7 +27,7 @@ def _test_db_connection(host: str, port: int, database: str, username: str, pass
         return False
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=DataSourceOut)
 async def create_data_source(body: DataSourceCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(DataSource).where(DataSource.name == body.name))
     if existing.scalar_one_or_none():
@@ -54,7 +55,7 @@ async def create_data_source(body: DataSourceCreate, db: AsyncSession = Depends(
     return ds.to_dict()
 
 
-@router.get("")
+@router.get("", response_model=Page[DataSourceOut])
 async def list_data_sources(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),
@@ -78,7 +79,7 @@ async def list_all_data_sources(db: AsyncSession = Depends(get_db)):
     return {"items": [{"id": ds.id, "name": ds.name, "enabled": ds.enabled} for ds in items]}
 
 
-@router.get("/{ds_id}")
+@router.get("/{ds_id}", response_model=DataSourceOut)
 async def get_data_source(ds_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DataSource).where(DataSource.id == ds_id))
     ds = result.scalar_one_or_none()
@@ -87,7 +88,7 @@ async def get_data_source(ds_id: str, db: AsyncSession = Depends(get_db)):
     return ds.to_dict()
 
 
-@router.put("/{ds_id}")
+@router.put("/{ds_id}", response_model=DataSourceOut)
 async def update_data_source(ds_id: str, body: DataSourceUpdate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(DataSource).where(DataSource.id == ds_id))
     ds = result.scalar_one_or_none()

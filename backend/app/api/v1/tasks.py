@@ -10,7 +10,8 @@ import polars as pl
 
 from app.db import get_db
 from app.models.task import ExecutionTask
-from app.schemas.task import TaskCreate
+from app.schemas.task import TaskCreate, TaskOut
+from app.schemas.common import Page
 from app.services.execution_service import execute_dataframe
 
 router = APIRouter()
@@ -59,7 +60,7 @@ async def execute_upload_task(file: UploadFile = File(...), db: AsyncSession = D
     return await execute_dataframe(db, df, file.filename)
 
 
-@router.get("/{task_id}/status")
+@router.get("/{task_id}/status", response_model=TaskOut)
 async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ExecutionTask).where(ExecutionTask.id == task_id))
     task = result.scalar_one_or_none()
@@ -81,7 +82,7 @@ async def download_task_result(task_id: str, db: AsyncSession = Depends(get_db))
     raise HTTPException(status_code=404, detail="输出文件不存在")
 
 
-@router.get("")
+@router.get("", response_model=Page[TaskOut])
 async def list_tasks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
