@@ -22,7 +22,7 @@ class Rule(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     lookup_table_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    depends_on: Mapped[str | None] = mapped_column(Text, nullable=True, default="[]")
+    depends_on: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     description: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
@@ -31,15 +31,6 @@ class Rule(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
-
-    def _parse_depends_on(self) -> list[str]:
-        import json
-        if not self.depends_on:
-            return []
-        try:
-            return json.loads(self.depends_on)
-        except (json.JSONDecodeError, TypeError):
-            return []
 
     def to_dict(self) -> dict:
         return {
@@ -52,7 +43,7 @@ class Rule(Base):
             "enabled": self.enabled,
             "config": self.config if isinstance(self.config, dict) else {},
             "lookup_table_id": self.lookup_table_id,
-            "depends_on": self._parse_depends_on(),
+            "depends_on": self.depends_on or [],
             "description": self.description,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,

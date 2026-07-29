@@ -1,6 +1,4 @@
 """规则管理 API"""
-import json
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -69,7 +67,7 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
         field_name=body.field_name, field_label=body.field_label,
         rule_type=body.rule_type, priority=body.priority, enabled=body.enabled,
         config=body.config.model_dump(), lookup_table_id=body.lookup_table_id,
-        depends_on=json.dumps(body.depends_on) if body.depends_on else "[]", description=body.description,
+        depends_on=body.depends_on or [], description=body.description,
     )
     db.add(rule)
     await db.flush()
@@ -107,8 +105,6 @@ async def update_rule(rule_id: str, body: RuleUpdate, db: AsyncSession = Depends
     update_data = body.model_dump(exclude_unset=True)
     if "config" in update_data and hasattr(update_data.get("config"), "model_dump"):
         update_data["config"] = update_data["config"].model_dump()
-    if "depends_on" in update_data and isinstance(update_data["depends_on"], list):
-        update_data["depends_on"] = json.dumps(update_data["depends_on"])
     for key, value in update_data.items():
         setattr(rule, key, value)
     await db.flush()
