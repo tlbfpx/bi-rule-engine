@@ -16,23 +16,15 @@ import { useRuleEditorStore } from '../../stores/ruleStore';
 import type { Rule, RuleType } from '../../types';
 import RuleEditorDrawer from '../RuleEditor';
 import RuleTestModal from '../RuleTest';
+import { RULE_TYPE_TAG, RULE_TYPE_OPTIONS } from '../../utils/ruleLabels';
 
 const { Search } = Input;
 
-const RULE_TYPE_OPTIONS: { value: RuleType | ''; label: string }[] = [
+// 过滤器比基础选项多一个「全部类型」
+const FILTER_TYPE_OPTIONS: { value: RuleType | ''; label: string }[] = [
   { value: '', label: '全部类型' },
-  { value: 'mapping', label: '条件映射' },
-  { value: 'cleaning', label: '数据清洗' },
-  { value: 'lookup', label: '字典查找' },
-  { value: 'computed', label: '公式计算' },
+  ...RULE_TYPE_OPTIONS,
 ];
-
-const RULE_TYPE_TAG: Record<RuleType, { color: string; label: string }> = {
-  mapping: { color: 'blue', label: '条件映射' },
-  cleaning: { color: 'green', label: '数据清洗' },
-  lookup: { color: 'orange', label: '字典查找' },
-  computed: { color: 'purple', label: '公式计算' },
-};
 
 interface RuleListProps {
   ruleSetId?: string;
@@ -219,7 +211,7 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
             <Select
               value={filterType}
               onChange={setFilterType}
-              options={RULE_TYPE_OPTIONS}
+              options={FILTER_TYPE_OPTIONS}
               style={{ width: 130 }}
             />
             {!ruleSetId && (

@@ -1,14 +1,7 @@
 import { Button, Select, Input, Space, Typography, Empty } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useRuleEditorStore } from '../../stores/ruleStore';
-
-const ACTION_OPTIONS = [
-  { value: 'fill_null', label: '空值填充' },
-  { value: 'replace_string', label: '字符串替换' },
-  { value: 'regex_extract', label: '正则提取' },
-  { value: 'trim', label: '去除首尾空格' },
-  { value: 'case_convert', label: '大小写转换' },
-];
+import { CLEANING_ACTION_OPTIONS as ACTION_OPTIONS } from '../../utils/ruleLabels';
 
 export default function CleaningConfig() {
   const { config, addCleaningStep, removeCleaningStep, updateCleaningStep } = useRuleEditorStore();

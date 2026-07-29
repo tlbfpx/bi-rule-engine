@@ -1,13 +1,6 @@
 import { Form, Input, Select, InputNumber, Switch, Space } from 'antd';
 import { useRuleEditorStore } from '../../stores/ruleStore';
-import type { RuleType } from '../../types';
-
-const RULE_TYPE_OPTIONS: { value: RuleType; label: string }[] = [
-  { value: 'mapping', label: '条件映射' },
-  { value: 'cleaning', label: '数据清洗' },
-  { value: 'lookup', label: '字典查找' },
-  { value: 'computed', label: '公式计算' },
-];
+import { RULE_TYPE_OPTIONS } from '../../utils/ruleLabels';
 
 export default function BasicInfoForm() {
   const {

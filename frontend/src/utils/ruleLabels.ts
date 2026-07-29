@@ -70,3 +70,29 @@ export const NO_VALUE_OPERATORS: ReadonlySet<OperatorType> = new Set([
   'is_null',
   'is_not_null',
 ]);
+
+// ─── 选项数组（从上面的 Record 派生，供 <Select options> 直接使用） ───
+
+type Option<V extends string> = { value: V; label: string };
+
+export const RULE_TYPE_OPTIONS: Option<RuleType>[] = (
+  Object.keys(RULE_TYPE_TAG) as RuleType[]
+).map((value) => ({ value, label: RULE_TYPE_TAG[value].label }));
+
+export const OPERATOR_OPTIONS: Option<OperatorType>[] = (
+  Object.keys(OPERATOR_LABEL) as OperatorType[]
+).map((value) => ({ value, label: OPERATOR_LABEL[value] }));
+
+export const CLEANING_ACTION_OPTIONS: Option<CleaningStep['action']>[] = (
+  Object.keys(CLEANING_ACTION_LABEL) as CleaningStep['action'][]
+).map((value) => ({ value, label: CLEANING_ACTION_LABEL[value] }));
+
+export const RESULT_TYPE_OPTIONS: Option<ConditionGroup['result_type']>[] = (
+  Object.keys(RESULT_TYPE_LABEL) as ConditionGroup['result_type'][]
+).map((value) => ({ value, label: RESULT_TYPE_LABEL[value] }));
+
+/** 条件组逻辑连接（AND/OR）选项 */
+export const LOGIC_OPTIONS: Option<ConditionGroup['logic']>[] = [
+  { value: 'AND', label: '全部 (AND)' },
+  { value: 'OR', label: '任一 (OR)' },
+];

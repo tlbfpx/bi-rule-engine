@@ -6,17 +6,7 @@ import { useRuleEditorStore } from '../../stores/ruleStore';
 import OperatorSelect from '../../components/OperatorSelect';
 import FieldSelect from '../../components/FieldSelect';
 import type { ConditionGroup, OperatorType } from '../../types';
-
-const LOGIC_OPTIONS = [
-  { value: 'AND', label: '全部 (AND)' },
-  { value: 'OR', label: '任一 (OR)' },
-];
-
-const RESULT_TYPE_OPTIONS = [
-  { value: 'constant', label: '固定值' },
-  { value: 'field_value', label: '取字段值' },
-  { value: 'keep_original', label: '保持原值' },
-];
+import { LOGIC_OPTIONS, RESULT_TYPE_OPTIONS } from '../../utils/ruleLabels';
 
 interface Props {
   group: ConditionGroup;
