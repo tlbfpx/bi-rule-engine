@@ -163,6 +163,14 @@ export interface TaskCreatePayload {
   output_format: string;
 }
 
+export interface ColumnProfile {
+  distinct_count: number;
+  top_values: { value: string | null; count: number }[];
+  sample_values: string[];
+  null_rate: number;
+  dtype: string;
+}
+
 export interface UploadPreviewResult {
   filename: string;
   total_rows: number;
@@ -170,6 +178,7 @@ export interface UploadPreviewResult {
   columns: string[];
   preview_rows: Record<string, unknown>[];
   null_stats: Record<string, { null_count: number; null_rate: number }>;
+  column_profiles?: Record<string, ColumnProfile>;
 }
 
 export interface ExecuteResult {

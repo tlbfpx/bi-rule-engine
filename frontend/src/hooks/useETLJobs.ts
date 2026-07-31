@@ -83,9 +83,10 @@ export function useETLJobRun(runId: string | null) {
   });
 }
 
-export function useAllETLJobRuns(params?: { page?: number; page_size?: number; status?: string }) {
+export function useAllETLJobRuns(params?: { page?: number; page_size?: number; status?: string }, enabled: boolean = true) {
   return useQuery({
     queryKey: ['etlJobRuns', 'all', params],
     queryFn: () => etlJobsApi.listAllRuns(params),
+    enabled,
   });
 }

@@ -2,6 +2,7 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from app.utils.sanitize import sanitize_user_input
 
 
 class DataSourceBase(BaseModel):
@@ -25,6 +26,11 @@ class DataSourceBase(BaseModel):
             return None
         return v
 
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        return sanitize_user_input(v)
+
 
 class DataSourceCreate(DataSourceBase):
     db_password: str = Field(..., min_length=1)
@@ -45,6 +51,11 @@ class DataSourceUpdate(BaseModel):
     incremental_column: Optional[str] = Field(default=None, max_length=100)
     incremental_value: Optional[str] = Field(default=None, max_length=500)
 
+    @field_validator("name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        return sanitize_user_input(v)
+
 
 class DataSourceOut(DataSourceBase):
     id: str
@@ -56,8 +67,8 @@ class DataSourceOut(DataSourceBase):
 
 
 class DataSourceTestRequest(BaseModel):
-    db_host: str
-    db_port: int = 3306
-    db_name: str
-    db_username: str
+    db_host: str = Field(..., max_length=200)
+    db_port: int = Field(default=3306, ge=1, le=65535)
+    db_name: str = Field(..., max_length=200)
+    db_username: str = Field(..., max_length=200)
     db_password: str

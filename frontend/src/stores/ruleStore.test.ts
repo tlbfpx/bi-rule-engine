@@ -11,9 +11,9 @@ describe('ruleStore (规则编辑器 Zustand store)', () => {
   // ============ generateId ============
 
   describe('generateId', () => {
-    it('生成格式为 temp_<num>_<timestamp> 的 ID', () => {
+    it('生成唯一的 UUID 格式 ID', () => {
       const id = generateId();
-      expect(id).toMatch(/^temp_\d+_\d+$/);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     });
 
     it('每次调用生成不同的 ID', () => {

@@ -13,4 +13,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    sourcemap: false,
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-antd': ['antd', '@ant-design/icons'],
+          'vendor-echarts': ['echarts', 'echarts-for-react'],
+          'vendor-monaco': ['@monaco-editor/react'],
+          'vendor-flow': ['@xyflow/react'],
+        },
+      },
+    },
+  },
 })

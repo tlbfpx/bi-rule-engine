@@ -17,12 +17,14 @@ class ETLJob(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("data_sources.id"), nullable=False
+        String(36), ForeignKey("data_sources.id", ondelete="RESTRICT"), nullable=False
     )
     target_table_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("target_tables.id"), nullable=False
+        String(36), ForeignKey("target_tables.id", ondelete="RESTRICT"), nullable=False
     )
-    rule_set_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    rule_set_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("rule_sets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # 调度配置
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)

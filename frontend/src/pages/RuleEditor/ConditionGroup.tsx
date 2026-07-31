@@ -1,21 +1,36 @@
-import { Button, Select, Input, Space, Tooltip, Typography } from 'antd';
+import { Button, Select, Input, Space, Tooltip, Typography, Tag } from 'antd';
 import {
   DeleteOutlined, PlusOutlined, HolderOutlined,
 } from '@ant-design/icons';
+import { useMemo } from 'react';
 import { useRuleEditorStore } from '../../stores/ruleStore';
 import OperatorSelect from '../../components/OperatorSelect';
 import FieldSelect from '../../components/FieldSelect';
 import type { ConditionGroup, OperatorType } from '../../types';
 import { LOGIC_OPTIONS, RESULT_TYPE_OPTIONS } from '../../utils/ruleLabels';
+import { countMatches, formatMatchCount } from '../../utils/conditionMatcher';
 
 interface Props {
   group: ConditionGroup;
-  index: number;
 }
 
 export default function ConditionGroupCard({ group }: Props) {
   const { updateConditionGroup, removeConditionGroup, addConditionRow, removeConditionRow, updateConditionRow } =
     useRuleEditorStore();
+  const dataContext = useRuleEditorStore((s) => s.dataContext);
+
+  // 实时计算条件组匹配行数（基于预览数据）
+  const matchInfo = useMemo(() => {
+    if (!dataContext?.previewRows?.length) return null;
+    const matched = countMatches(group, dataContext.previewRows);
+    return formatMatchCount(matched, dataContext.previewRows.length, dataContext.totalRows);
+  }, [group, dataContext]);
+
+  // 从数据画像中提取可用字段列表
+  const availableFields = useMemo(
+    () => (dataContext?.columnProfiles ? Object.keys(dataContext.columnProfiles) : undefined),
+    [dataContext?.columnProfiles],
+  );
 
   const handleAddRow = () => addConditionRow(group.id);
   const handleRemoveRow = (rowId: string) => removeConditionRow(group.id, rowId);
@@ -39,6 +54,9 @@ export default function ConditionGroupCard({ group }: Props) {
             size="small"
             style={{ width: 140 }}
           />
+          {matchInfo && (
+            <Tag color="blue" style={{ marginLeft: 4 }}>{matchInfo}</Tag>
+          )}
         </Space>
         <Space>
           <Tooltip title="删除条件组">
@@ -64,6 +82,8 @@ export default function ConditionGroupCard({ group }: Props) {
               onChange={(v) => updateConditionRow(group.id, row.id, { field: v })}
               placeholder="字段名"
               style={{ width: 180 }}
+              availableFields={availableFields}
+              columnProfiles={dataContext?.columnProfiles}
             />
             <OperatorSelect
               value={row.operator}
@@ -124,6 +144,8 @@ export default function ConditionGroupCard({ group }: Props) {
               onChange={(v) => updateConditionGroup(group.id, { result_value: v })}
               placeholder="选择字段"
               style={{ width: 180 }}
+              availableFields={availableFields}
+              columnProfiles={dataContext?.columnProfiles}
             />
           )}
         </Space>

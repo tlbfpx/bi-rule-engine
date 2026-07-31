@@ -1,11 +1,12 @@
 """目标表管理 API"""
 import pymysql
 import polars as pl
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from loguru import logger
 
+from app.core.exceptions import BizErrorCode, BizException, DuplicateException, NotFoundException
 from app.db import get_db
 from app.models.target_table import TargetTable
 from app.schemas.target_table import TargetTableCreate, TargetTableUpdate, TargetTableOut, TargetTableTestRequest
@@ -15,23 +16,26 @@ router = APIRouter()
 
 
 def _test_db_connection(host: str, port: int, database: str, username: str, password: str) -> bool:
+    conn = None
     try:
         conn = pymysql.connect(
             host=host, port=port, user=username, password=password,
             database=database, charset="utf8mb4", connect_timeout=5,
         )
-        conn.close()
         return True
     except Exception as e:
         logger.warning(f"数据库连接测试失败: {e}")
         return False
+    finally:
+        if conn:
+            conn.close()
 
 
 @router.post("", status_code=201, response_model=TargetTableOut)
 async def create_target_table(body: TargetTableCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(TargetTable).where(TargetTable.name == body.name))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="目标表配置名称已存在")
+        raise DuplicateException(detail="目标表配置名称已存在")
 
     tt = TargetTable(
         name=body.name,
@@ -57,7 +61,7 @@ async def create_target_table(body: TargetTableCreate, db: AsyncSession = Depend
 @router.get("", response_model=Page[TargetTableOut])
 async def list_target_tables(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(TargetTable)
@@ -82,7 +86,7 @@ async def get_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()
     if not tt:
-        raise HTTPException(status_code=404, detail="目标表配置不存在")
+        raise NotFoundException(detail="目标表配置不存在")
     return tt
 
 
@@ -91,13 +95,13 @@ async def update_target_table(tt_id: str, body: TargetTableUpdate, db: AsyncSess
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()
     if not tt:
-        raise HTTPException(status_code=404, detail="目标表配置不存在")
+        raise NotFoundException(detail="目标表配置不存在")
 
     update_data = body.model_dump(exclude_unset=True)
     if "name" in update_data and update_data["name"] != tt.name:
         existing = await db.execute(select(TargetTable).where(TargetTable.name == update_data["name"]))
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="目标表配置名称已存在")
+            raise DuplicateException(detail="目标表配置名称已存在")
 
     for field, value in update_data.items():
         if field == "db_password" and value:
@@ -116,7 +120,7 @@ async def delete_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()
     if not tt:
-        raise HTTPException(status_code=404, detail="目标表配置不存在")
+        raise NotFoundException(detail="目标表配置不存在")
     await db.delete(tt)
     logger.info(f"删除目标表配置: {tt.name}")
     return {"id": tt_id}
@@ -126,51 +130,70 @@ async def delete_target_table(tt_id: str, db: AsyncSession = Depends(get_db)):
 async def test_connection(body: TargetTableTestRequest):
     ok = _test_db_connection(body.db_host, body.db_port, body.db_name, body.db_username, body.db_password)
     if not ok:
-        raise HTTPException(status_code=400, detail="数据库连接失败")
+        raise BizException(code=BizErrorCode.BUSINESS_ERROR, detail="数据库连接失败")
     return {"ok": True}
 
 
 @router.post("/{tt_id}/sync-schema")
 async def sync_target_schema(tt_id: str, db: AsyncSession = Depends(get_db)):
-    """同步目标表结构：删除旧表并按当前规则输出字段重新创建"""
+    """同步目标表结构：删除旧表并按当前规则输出字段重新创建
+
+    输出字段从关联该目标表的 ETLJob → rule_set → Rule.field_name 动态推算，
+    而不是硬编码业务字段名。
+    """
     from app.engine.etl_runner import _ensure_table_exists
-    from app.engine.parser import RuleParser
     from app.models.rule import Rule
+    from app.models.etl_job import ETLJob
+    from sqlalchemy import distinct
 
     result = await db.execute(select(TargetTable).where(TargetTable.id == tt_id))
     tt = result.scalar_one_or_none()
     if not tt:
-        raise HTTPException(status_code=404, detail="目标表配置不存在")
+        raise NotFoundException(detail="目标表配置不存在")
 
-    # 创建空 DataFrame 模拟输出结构（包含所有规则输出字段 + 源字段）
-    # 从规则配置推算输出字段
-    rule_result = await db.execute(select(Rule).where(Rule.enabled == True).order_by(Rule.priority.asc()))
-    rules = rule_result.scalars().all()
+    # 从关联该目标表的 ETLJob → rule_set → Rule 动态推算输出字段
+    job_result = await db.execute(
+        select(ETLJob.rule_set_id).where(ETLJob.target_table_id == tt_id)
+    )
+    rule_set_ids = [row[0] for row in job_result.all() if row[0]]
 
-    # 收集所有可能的输出列
-    import polars as pl
-    columns = ["id", "partner_name", "eorder_name", "card_name", "pay_amount",
-               "sum_fin_rev", "card_product_seg_name", "fin_product", "reject_reason",
-               "buyer_contract_name", "buyer_contract_id", "company_segment_code",
-               "prod_class", "gmt_effect_end", "rate_2", "if_reject", "buyer_name",
-               "upd_eorder_name", "product_segment_code", "is_spec_reject",
-               "sum_fin_ar", "ar_balance"]
+    output_columns = []
+    if rule_set_ids:
+        rule_result = await db.execute(
+            select(distinct(Rule.field_name))
+            .where(Rule.rule_set_id.in_(rule_set_ids), Rule.enabled == True)
+            .order_by(Rule.field_name)
+        )
+        output_columns = [row[0] for row in rule_result.all()]
 
-    empty_df = pl.DataFrame({col: pl.Series([], dtype=pl.Utf8) for col in columns})
+    # 如果没有关联规则，至少包含一个占位列
+    if not output_columns:
+        raise BizException(
+            code=BizErrorCode.BUSINESS_ERROR,
+            detail=f"目标表 '{tt.name}' 未关联任何启用规则的 ETL 任务，无法推断输出字段",
+        )
+
+    empty_df = pl.DataFrame({col: pl.Series([], dtype=pl.Utf8) for col in output_columns})
 
     # 先 DROP 再建表
     try:
         conn = pymysql.connect(
             host=tt.db_host, port=tt.db_port, user=tt.db_username,
             password=tt.db_password, database=tt.db_name, charset="utf8mb4",
+            connect_timeout=10,
         )
-        with conn.cursor() as cur:
-            cur.execute(f"DROP TABLE IF EXISTS `{tt.table_name}`")
-            conn.commit()
-        conn.close()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"DROP TABLE IF EXISTS `{tt.table_name}`")
+                conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
     except Exception as e:
         logger.warning(f"删除旧表失败: {e}")
 
     _ensure_table_exists(empty_df, tt)
-    logger.info(f"同步目标表结构完成: {tt.table_name}")
-    return {"ok": True, "table": tt.table_name}
+    logger.info(f"同步目标表结构完成: {tt.table_name}, 输出字段={output_columns}")
+    return {"ok": True, "table": tt.table_name, "columns": output_columns}

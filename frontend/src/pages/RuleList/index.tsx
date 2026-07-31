@@ -57,9 +57,16 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
 
   // 测试面板状态
   const [testRuleId, setTestRuleId] = useState<string | null>(null);
+  // 跟踪正在更新中的规则 ID，只对对应行显示 loading
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const handleToggle = (rule: Rule) => {
-    updateRule.mutate({ id: rule.id, data: { enabled: !rule.enabled } });
+  const handleToggle = async (rule: Rule) => {
+    setTogglingId(rule.id);
+    try {
+      await updateRule.mutateAsync({ id: rule.id, data: { enabled: !rule.enabled } });
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleCopy = (rule: Rule) => {
@@ -149,7 +156,7 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
           size="small"
           checked={enabled}
           onChange={() => handleToggle(rule)}
-          loading={updateRule.isPending}
+          loading={togglingId === rule.id}
         />
       ),
     },

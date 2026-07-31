@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings
 
@@ -10,9 +11,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"  # development / staging / production
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    # 元数据库 (MySQL)
+    # 元数据库 (MySQL) — 以下为本地开发默认值，生产环境必须通过 .env 或环境变量覆盖
     DB_HOST: str = "localhost"
     DB_PORT: int = 3306
     DB_USER: str = "bi_rule"
@@ -23,16 +24,21 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        # 对密码做 URL 编码，防止含 @、#、/ 等特殊字符的密码破坏连接串
+        pwd = quote_plus(self.DB_PASSWORD)
+        user = quote_plus(self.DB_USER)
         return (
-            f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"mysql+aiomysql://{user}:{pwd}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
             f"?charset=utf8mb4"
         )
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
+        pwd = quote_plus(self.DB_PASSWORD)
+        user = quote_plus(self.DB_USER)
         return (
-            f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"mysql+pymysql://{user}:{pwd}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
             f"?charset=utf8mb4"
         )
@@ -46,8 +52,9 @@ class Settings(BaseSettings):
     @property
     def REDIS_URL(self) -> str:
         if self.REDIS_PASSWORD:
+            pwd = quote_plus(self.REDIS_PASSWORD)
             return (
-                f"redis://:{self.REDIS_PASSWORD}"
+                f"redis://:{pwd}"
                 f"@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
             )
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
@@ -66,7 +73,7 @@ class Settings(BaseSettings):
 
     # 文件存储
     STORAGE_DIR: str = "/workspace/bi-rule-engine/storage"
-    MAX_UPLOAD_SIZE_MB: int = 100
+    MAX_UPLOAD_SIZE_MB: int = 10
 
     # MySQL 数据源限制
     MAX_QUERY_ROWS: int = 2000000
@@ -97,6 +104,14 @@ class Settings(BaseSettings):
     # 审计日志（默认关闭，按需开启）
     AUDIT_LOG_ENABLED: bool = False
 
+    # ── 认证 ──
+    JWT_SECRET_KEY: str = "change-me-in-production-please-use-a-long-random-secret"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 1440  # 24h
+    # 默认管理员账号（首次启动自动创建，之后可通过 .env 覆盖）
+    DEFAULT_ADMIN_USERNAME: str = "admin"
+    DEFAULT_ADMIN_PASSWORD: str = "admin123"
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -110,6 +125,10 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == "production" and self.ENCRYPTION_KEY == "change-me-32-bytes-key-here!!":
             raise RuntimeError(
                 "生产环境必须设置 ENCRYPTION_KEY 环境变量（当前为默认值）"
+            )
+        if self.ENVIRONMENT == "production" and "change-me" in self.JWT_SECRET_KEY:
+            raise RuntimeError(
+                "生产环境必须设置 JWT_SECRET_KEY 环境变量（当前为默认值）"
             )
 
 

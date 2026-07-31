@@ -109,10 +109,123 @@ export const mockETLJobs = {
   page_size: 20,
 };
 
+export const mockLookupTables = {
+  items: [
+    {
+      id: 'lt_1',
+      name: '税率映射表',
+      description: '公司段到税率映射',
+      source_type: 'manual',
+      columns: { key_col: 'company_segment', value_col: 'rate' },
+      data: { '930000': '0', '972400': '0.06' },
+      created_at: '2024-01-01T00:00:00',
+      updated_at: '2024-01-01T00:00:00',
+    },
+    {
+      id: 'lt_2',
+      name: '产品段值映射',
+      description: '产品分类到段值',
+      source_type: 'manual',
+      columns: { key_col: 'product', value_col: 'segment' },
+      data: { '团体体检': 'P10012', '集团体检': 'P10011' },
+      created_at: '2024-01-02T00:00:00',
+      updated_at: '2024-01-02T00:00:00',
+    },
+  ],
+  total: 2,
+  page: 1,
+  page_size: 20,
+};
+
+export const mockRules = {
+  items: [
+    {
+      id: 'rule_1',
+      rule_set_id: 'rs_1',
+      field_name: 'rate_2',
+      field_label: '适用税率',
+      rule_type: 'mapping',
+      priority: 2,
+      enabled: true,
+      config: {
+        conditions: [
+          { id: 'cg_001', priority: 1, logic: 'AND', rows: [{ id: 'cr_001', field: 'company_segment_code', operator: 'in', value: ['930000', '840000'] }], result_type: 'constant', result_value: 0 },
+        ],
+        default_result: 0.06,
+      },
+      depends_on: ['company_segment_code'],
+      description: '公司段值930000/840000为0',
+      created_at: '2024-01-01T00:00:00',
+      updated_at: '2024-01-01T00:00:00',
+    },
+    {
+      id: 'rule_2',
+      rule_set_id: 'rs_1',
+      field_name: 'gmt_effect_end',
+      field_label: '结算账户名称',
+      rule_type: 'cleaning',
+      priority: 1,
+      enabled: true,
+      config: { cleaning_steps: [{ action: 'fill_null', source_field: 'partner_name' }] },
+      depends_on: [],
+      description: '空值填充',
+      created_at: '2024-01-01T00:00:00',
+      updated_at: '2024-01-01T00:00:00',
+    },
+  ],
+  total: 2,
+  page: 1,
+  page_size: 20,
+};
+
 /**
  * 设置 API 路由拦截 - 拦截所有 /api/v1 请求并返回 mock 数据
  */
 export async function setupApiMocks(page: import('@playwright/test').Page) {
+  // ── 认证 mock ──
+  // 预设 localStorage 中的 auth token（绕过登录页）
+  await page.addInitScript(() => {
+    const authData = {
+      state: {
+        token: 'mock-jwt-token',
+        username: 'admin',
+        role: 'admin',
+        displayName: '管理员',
+        isAuthenticated: true,
+      },
+      version: 0,
+    };
+    localStorage.setItem('auth-store', JSON.stringify(authData));
+  });
+
+  // 认证 API
+  await page.route('**/api/v1/auth/login', (route) => {
+    if (route.request().method() === 'POST') {
+      route.fulfill({
+        json: {
+          access_token: 'mock-jwt-token',
+          token_type: 'bearer',
+          expires_in: 86400,
+          username: 'admin',
+          role: 'admin',
+          display_name: '管理员',
+        },
+      });
+    }
+  });
+
+  await page.route('**/api/v1/auth/me', (route) => {
+    route.fulfill({
+      json: {
+        id: 'u1',
+        username: 'admin',
+        role: 'admin',
+        display_name: '管理员',
+        enabled: true,
+      },
+    });
+  });
+
   // 规则集
   await page.route('**/api/v1/rule-sets', (route) => {
     if (route.request().method() === 'GET') {
@@ -271,26 +384,27 @@ export async function setupApiMocks(page: import('@playwright/test').Page) {
 
   // 规则
   await page.route('**/api/v1/rules**', (route) => {
-    route.fulfill({
-      json: {
-        items: [],
-        total: 0,
-        page: 1,
-        page_size: 20,
-      },
-    });
+    route.fulfill({ json: mockRules });
   });
 
   // 字典表
   await page.route('**/api/v1/lookup-tables**', (route) => {
-    route.fulfill({
-      json: {
-        items: [],
-        total: 0,
-        page: 1,
-        page_size: 20,
-      },
-    });
+    if (route.request().method() === 'GET') {
+      route.fulfill({ json: mockLookupTables });
+    } else {
+      route.fulfill({
+        json: {
+          id: 'lt_new',
+          name: '新映射表',
+          description: '',
+          source_type: 'manual',
+          columns: { key_col: 'key', value_col: 'value' },
+          data: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      });
+    }
   });
 
   // 任务

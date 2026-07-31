@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { message } from 'antd';
 import { traceIdManager, reportError } from '../utils/logger';
+import { useAuthStore } from '../stores/authStore';
 
 const client = axios.create({
   baseURL: '/api/v1',
@@ -8,19 +9,23 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor: 注入 trace_id
+// Request interceptor: 注入 trace_id + JWT token
 client.interceptors.request.use((config) => {
   const traceId = traceIdManager.get();
   if (traceId) {
     config.headers['X-Trace-Id'] = traceId;
   }
+  // 自动附加 Authorization header
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
   return config;
 });
 
-// Response interceptor: 提取 trace_id + 错误上报
+// Response interceptor: 提取 trace_id + 错误上报 + 401 重定向
 client.interceptors.response.use(
   (response) => {
-    // 从响应头提取 trace_id 并缓存（后端首次返回时建立关联）
     const traceId = response.headers['x-trace-id'];
     if (traceId) {
       traceIdManager.set(traceId);
@@ -28,15 +33,27 @@ client.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 即使出错也提取 trace_id
     const traceId = error.response?.headers?.['x-trace-id'];
     if (traceId) {
       traceIdManager.set(traceId);
     }
 
-    const msg = error.response?.data?.detail || error.message || '请求失败';
+    // 401 Unauthorized — 清除 token 并重定向到登录页
+    if (error.response?.status === 401) {
+      const authStore = useAuthStore.getState();
+      if (authStore.isAuthenticated) {
+        authStore.logout();
+        message.warning('登录已过期，请重新登录');
+        // 使用 setTimeout 确保 message 先渲染
+        setTimeout(() => {
+          window.location.hash = '#/login';
+        }, 100);
+      }
+      return Promise.reject(error);
+    }
 
-    // 5xx 服务端错误：自动上报
+    const msg = error.response?.data?.detail || error.response?.data?.message || error.message || '请求失败';
+
     if (error.response?.status >= 500) {
       reportError({
         message: `HTTP ${error.response.status}: ${msg}`,
@@ -44,7 +61,9 @@ client.interceptors.response.use(
       });
     }
 
-    message.error(msg);
+    if (!error.config?.skipErrorMessage) {
+      message.error(msg);
+    }
     return Promise.reject(error);
   }
 );

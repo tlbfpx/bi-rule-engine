@@ -35,11 +35,25 @@ export const traceIdManager = {
 };
 
 // ── 错误上报 ──
+
+// 防抖：同一 message 30 秒内只上报一次，防止渲染崩溃导致的请求风暴
+let _lastReportedMessage = '';
+let _lastReportedTime = 0;
+const REPORT_DEBOUNCE_MS = 30_000;
+
 export async function reportError(error: {
   message: string;
   stack?: string;
   url?: string;
 }): Promise<void> {
+  const now = Date.now();
+  // 相同错误消息在防抖窗口内跳过
+  if (error.message === _lastReportedMessage && now - _lastReportedTime < REPORT_DEBOUNCE_MS) {
+    return;
+  }
+  _lastReportedMessage = error.message;
+  _lastReportedTime = now;
+
   const traceId = traceIdManager.get();
   try {
     // 使用原生 fetch（非 axios，避免循环依赖和拦截器干扰）

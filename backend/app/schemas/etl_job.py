@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from app.schemas.data_source import DataSourceOut
 from app.schemas.target_table import TargetTableOut
+from app.utils.sanitize import sanitize_user_input
 
 
 class ETLJobBase(BaseModel):
@@ -20,7 +21,10 @@ class ETLJobBase(BaseModel):
 
 
 class ETLJobCreate(ETLJobBase):
-    pass
+    @field_validator("job_name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        return sanitize_user_input(v)
 
 
 class ETLJobUpdate(BaseModel):
@@ -34,6 +38,11 @@ class ETLJobUpdate(BaseModel):
     timezone: Optional[str] = Field(default=None, max_length=50)
     error_retry_count: Optional[int] = Field(default=None, ge=0, le=10)
     timeout_seconds: Optional[int] = Field(default=None, ge=60, le=86400)
+
+    @field_validator("job_name", "description", mode="before")
+    @classmethod
+    def sanitize_text_fields(cls, v):
+        return sanitize_user_input(v)
 
 
 class ETLJobOut(ETLJobBase):

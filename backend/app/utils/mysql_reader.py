@@ -11,16 +11,30 @@ def read_mysql_query(
     host: str, port: int, database: str,
     username: str, password: str,
     query: str,
+    params: dict | None = None,
 ) -> pl.DataFrame:
-    """从 MySQL 读取查询结果到 Polars DataFrame"""
+    """从 MySQL 读取查询结果到 Polars DataFrame
+
+    Args:
+        params: 可选的参数化查询绑定参数（推荐使用，避免 SQL 注入）
+    """
     connection_uri = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}?charset=utf8mb4"
 
     logger.info(f"MySQL 查询: {host}:{port}/{database}")
     logger.debug(f"SQL: {query[:200]}...")
 
-    engine = create_engine(connection_uri, pool_pre_ping=True)
-    with engine.connect() as conn:
-        df = pl.read_database(query=text(query), connection=conn)
+    engine = create_engine(connection_uri, pool_pre_ping=True, pool_recycle=3600)
+    try:
+        with engine.connect() as conn:
+            if params:
+                df = pl.read_database(
+                    query=text(query), connection=conn,
+                    execute_options={"parameters": params},
+                )
+            else:
+                df = pl.read_database(query=text(query), connection=conn)
+    finally:
+        engine.dispose()
 
     if len(df) > settings.MAX_QUERY_ROWS:
         logger.warning(f"查询结果 {len(df)} 行超过上限 {settings.MAX_QUERY_ROWS}，已截断")

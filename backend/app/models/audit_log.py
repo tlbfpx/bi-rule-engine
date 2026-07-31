@@ -1,7 +1,7 @@
 """审计日志 ORM 模型（可选，默认关闭）"""
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, JSON, func
+from sqlalchemy import String, Text, DateTime, JSON, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
@@ -9,6 +9,10 @@ from app.db import Base
 class AuditLog(Base):
     """操作审计日志表 — 记录关键操作的审计轨迹"""
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_resource", "resource_type", "resource_id"),
+        Index("ix_audit_logs_created_at", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())

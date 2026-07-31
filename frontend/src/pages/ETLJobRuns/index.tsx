@@ -16,8 +16,9 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
 export default function ETLJobRunList({ jobId, embedded = false }: { jobId?: string; embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
+  // 根据 jobId 决定查全量还是单 job 的 runs，避免同时发两个请求
   const jobRuns = useETLJobRuns(jobId || null, { page, page_size: pageSize });
-  const allRuns = useAllETLJobRuns({ page, page_size: pageSize });
+  const allRuns = useAllETLJobRuns({ page, page_size: pageSize }, !jobId);
   const { data, isLoading } = jobId ? jobRuns : allRuns;
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 

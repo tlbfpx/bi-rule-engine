@@ -1,116 +1,131 @@
-# BI 规则引擎前端 - 测试系统搭建报告
+# 上线前工作路线图
 
-## 概述
+> 2026-07-30 · 在五轮代码审查 + 三大工程能力补全后，评估上线前剩余工作
 
-为 BI 规则引擎前端系统搭建了完整的测试体系，从零开始建立了 **Vitest 单元/组件测试** 和 **Playwright E2E 测试** 两层测试架构。
+## 当前完成度
 
-**测试结果：123 个单元/组件测试全部通过，0 失败。**
-
----
-
-## 测试基础设施
-
-### 技术栈
-| 层级 | 工具 | 版本 |
+| 维度 | 状态 | 说明 |
 |------|------|------|
-| 单元/组件测试 | Vitest + jsdom | 4.1.10 |
-| 组件渲染 | @testing-library/react | 16.3.2 |
-| 用户交互模拟 | @testing-library/user-event | 14.6.1 |
-| DOM 断言 | @testing-library/jest-dom | 7.0.0 |
-| E2E 测试 | @playwright/test | 1.61.1 |
-| 覆盖率 | @vitest/coverage-v8 | 4.1.10 |
-| HTML 报告 | @vitest/ui | 4.1.10 |
+| 代码质量 | ✅ 完成 | 5 轮审查，94 个问题修复 |
+| 单元测试 | ✅ 完成 | pytest 47/47, vitest 139/139 |
+| 认证安全 | ✅ 完成 | JWT + bcrypt + 路由守卫 |
+| ETL 正确性 | ✅ 完成 | 11 行真实数据验证 |
+| 生产部署架构 | ❌ 缺失 | 前端无 Dockerfile, 无 nginx, compose 是 dev 配置 |
+| CI/CD 流水线 | ❌ 缺失 | 无 .github/workflows |
+| 可观测性 | ❌ 缺失 | 无 metrics, 无告警, 无日志收集 |
+| 性能验证 | ❌ 缺失 | 仅 11 行数据 |
+| 数据安全 | ❌ 缺失 | 无备份策略 |
 
-### 配置文件
-- `vitest.config.ts` — Vitest 配置（jsdom 环境、全局 API、覆盖率）
-- `playwright.config.ts` — Playwright 配置（Chromium、自动启动 dev server）
-- `src/test/setup.ts` — 测试全局 setup（jest-dom matchers、jsdom polyfill、antd message mock）
-- `src/test/utils.tsx` — 测试工具（renderWithProviders 自动包裹 QueryClient/Router/ConfigProvider）
+**生产就绪度: ~60%**
 
-### npm scripts
-```json
-"test": "vitest run",
-"test:watch": "vitest",
-"test:coverage": "vitest run --coverage",
-"test:e2e": "playwright test",
-"test:e2e:ui": "playwright test --ui"
+---
+
+## P0 — 安全与配置（上线前必做）
+
+### 已有的防护（代码已实现）
+
+`config.py` 已有生产环境断言：
+```python
+# config.py:125-132
+if self.ENVIRONMENT == "production" and self.ENCRYPTION_KEY == "change-me-32-bytes-key-here!!":
+    raise RuntimeError("生产环境必须设置 ENCRYPTION_KEY")
+if self.ENVIRONMENT == "production" and "change-me" in self.JWT_SECRET_KEY:
+    raise RuntimeError("生产环境必须设置 JWT_SECRET_KEY")
+```
+
+### 需要做的事
+
+1. **生产 .env 文件**: 设置 `ENVIRONMENT=production`，生成随机 JWT_SECRET_KEY 和 ENCRYPTION_KEY
+2. **改默认密码**: `main.py` lifespan 自动创建 admin/admin123，上线后必须立刻改密码
+3. **CORS 收窄**: `config.py:14` 当前允许 localhost:5173 和 localhost:3000，生产改为实际域名
+4. **数据库密码**: docker-compose.yml 中 MYSQL_ROOT_PASSWORD 和 MYSQL_PASSWORD 使用默认值
+
+---
+
+## P1 — 容器化与部署架构
+
+### 当前问题
+
+| 问题 | 文件 | 说明 |
+|------|------|------|
+| 前端无 Dockerfile | - | 仅 `backend/Dockerfile` 存在 |
+| compose 是 dev 配置 | `docker-compose.yml:39` | api 用 `--reload`，生产需移除 |
+| 无 nginx 反代 | - | 前端静态资源和 API 需统一端口 |
+| api 无 healthcheck | `docker-compose.yml:37-54` | mysql/redis 有 healthcheck，api 没有 |
+| MinIO 存储未挂载 | `docker-compose.yml:54` | `STORAGE_DIR=/workspace/bi-rule-engine/storage` 未映射到 MinIO |
+| 前端 build 产物无服务 | - | Vite build 后需要 nginx/serve 托管 |
+
+### 需要创建
+
+1. `frontend/Dockerfile` — 多阶段构建（node build → nginx serve）
+2. `frontend/nginx.conf` — SPA fallback + API 反代到 api:8000
+3. `docker-compose.prod.yml` — 生产编排（去掉 --reload，加 healthcheck，加 nginx）
+4. `.env.production.template` — 生产环境变量模板
+
+---
+
+## P2 — CI/CD 流水线
+
+### 当前状态
+
+项目中 **完全没有 CI 配置**：无 `.github/workflows/`，无 `.gitlab-ci.yml`。
+
+五轮代码审查修复的 94 个问题、47+139 个测试，全部只在本地手动运行。任何一次提交都可能引入回归。
+
+### 建议流水线
+
+```yaml
+# .github/workflows/ci.yml
+on: [push, pull_request]
+jobs:
+  backend:
+    - lint: ruff check
+    - type: mypy app/
+    - test: pytest --tb=short
+  frontend:
+    - lint: oxlint
+    - type: tsc --noEmit
+    - test: vitest run
+    - build: vite build
+  docker:
+    - docker build ./backend
+    - docker build ./frontend
 ```
 
 ---
 
-## 测试文件清单
+## P3 — 可观测性与运维
 
-### 单元测试 — 纯逻辑模块（56 tests）
+### 已有基础
 
-| 文件 | 测试数 | 覆盖内容 |
-|------|--------|----------|
-| `src/utils/logger.test.ts` | 11 | traceId 管理（set/get/clear/异常容错）、错误上报 fetch 请求、initLogger |
-| `src/stores/appStore.test.ts` | 8 | sidebarCollapsed 初始状态、toggleSidebar 切换、setState/getState |
-| `src/stores/ruleStore.test.ts` | 37 | 规则编辑器全量操作：openEditor/closeEditor/resetEditor、条件组 CRUD、条件行 CRUD、清洗步骤 CRUD、查找配置 CRUD、公式/默认值 |
+- ✅ Loguru 结构化日志 + 日志轮转（access/error/app 三通道）
+- ✅ trace_id 全链路追踪
+- ✅ `/api/health` 健康检查端点（检查 DB 连接）
+- ✅ 前端错误上报到后端（`/api/v1/logs/frontend-error`）
+- ✅ SecurityHeadersMiddleware 安全响应头
 
-### 组件测试 — UI 交互（21 tests）
+### 缺失项
 
-| 文件 | 测试数 | 覆盖内容 |
-|------|--------|----------|
-| `src/components/ErrorBoundary.test.tsx` | 5 | 正常渲染、错误捕获、重试恢复、自定义 fallback、错误信息展示 |
-| `src/components/Layout/Sidebar.test.tsx` | 5 | 标题渲染、菜单项完整性、点击导航、路由高亮、折叠状态 |
-| `src/pages/RuleSetManager/index.test.tsx` | 10 | 列表渲染、空状态、新建/编辑/删除 CRUD、表单校验、卡片点击跳转 |
-| `src/pages/DataSources/index.test.tsx` | 11 | 表格渲染、中文标签/Tag、分页、Drawer 表单、编辑预填、抽取方式联动、删除确认 |
-
-### API 层测试（46 tests）
-
-| 文件 | 测试数 | 覆盖内容 |
-|------|--------|----------|
-| `src/api/client.test.ts` | 11 | axios 配置、请求拦截器（trace_id 注入）、响应拦截器（trace_id 提取）、错误处理 |
-| `src/api/rules.test.ts` | 9 | rulesApi 全方法（list/get/create/update/delete/batchPriority/test） |
-| `src/api/ruleSets.test.ts` | 7 | ruleSetsApi 全方法（list/all/get/create/update/delete） |
-| `src/api/dataSources.test.ts` | 9 | dataSourcesApi 全方法（list/listAll/get/create/update/delete/testConnection/preview） |
-
-### E2E 测试（Playwright，已编写未运行）
-
-| 文件 | 测试场景 |
-|------|----------|
-| `e2e/app-navigation.spec.ts` | 应用加载、默认路由、侧边栏菜单、页面导航、折叠/展开、未知路由重定向 |
-| `e2e/rule-set-crud.spec.ts` | 业务线列表、新建、编辑、删除、卡片跳转 |
-| `e2e/data-source-management.spec.ts` | 数据源列表、新建 Drawer、编辑预填、测试连接、删除 |
-| `e2e/etl-and-misc.spec.ts` | ETL 任务列表、任务中心 Tab 切换、响应式、键盘可访问性 |
+1. **无 Prometheus metrics**: ETL 执行耗时、成功率、并发数不可观测
+2. **无日志收集**: 日志写在容器内 `/tmp`，容器销毁即丢失
+3. **无告警**: ETL 失败/超时只写日志，无企业微信/钉钉/邮件通知
+4. **无 readiness 区分**: `/api/health` 不区分 liveness/readiness
+5. **无 Grafana 面板**: 无可视化运维视图
 
 ---
 
-## 发现的问题
+## P4 — 性能验证与数据安全
 
-### 1. RuleSetManager handleSubmit 未捕获表单校验异常（中）
-- **位置**：`src/pages/RuleSetManager/index.tsx` 第 57-68 行
-- **现象**：`handleSubmit` 中 `await form.validateFields()` 在校验失败时抛出 rejection，但 Modal 的 `onOk` 回调不会捕获这个 rejection，导致 unhandled promise rejection
-- **影响**：用户点击"确定"但表单未填写必填项时，控制台出现未捕获异常
-- **建议**：在 `handleSubmit` 中添加 try/catch
+### 性能
 
----
+- ETL 引擎仅验证 11 行数据
+- `config.py` 中 `MAX_QUERY_ROWS=2000000`，`ETL_BATCH_SIZE=10000`
+- Polars 内存占用在大数据量下未验证
+- 并发 ETL 任务（`SCHEDULER_MAX_INSTANCES=3`）的资源竞争未测试
 
-## 测试金字塔覆盖
+### 数据安全
 
-```
-        /\
-       /  \         E2E (Playwright)
-      /----\        4 spec files, ~25 scenarios
-     /      \
-    /--------\      组件测试 (RTL)
-   /          \     21 tests
-  /------------\
- /              \    单元测试 (Vitest)
-/________________\   102 tests
-```
-
-- **单元测试**：102 tests（83%）— 纯逻辑模块 + API 层
-- **组件测试**：21 tests（17%）— 关键 UI 组件交互
-- **E2E 测试**：~25 scenarios — 核心用户旅程（已编写，待实际环境运行）
-
----
-
-## 下一步建议
-
-1. **运行 E2E 测试**：在本地开发环境中运行 `npm run test:e2e`，需要后端服务运行或使用 API mock
-2. **补充覆盖率**：当前因沙箱限制未能生成覆盖率报告，建议在 CI 环境中运行 `npm run test:coverage`
-3. **扩展组件测试**：RuleEditor 的复杂表单（条件构建器、公式编辑器、清洗配置）需要更深入的测试
-4. **修复 handleSubmit**：为 RuleSetManager 和 DataSources 的提交函数添加 try/catch
-5. **视觉回归测试**：考虑添加 Playwright 截图对比，覆盖跨浏览器适配
+- MySQL: docker-compose 有 `mysql_data` 卷，但无备份脚本
+- Redis: `redis:7-alpine` 镜像默认无持久化配置
+- Alembic 迁移: 需确认 `alembic upgrade head` 在生产环境的执行流程
+- 存储目录: `storage/` 下有业务数据文件（CSV/XLSX），需定期备份

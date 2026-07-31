@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type { ConditionGroup, CleaningStep, LookupFallback, RuleType, RuleConfig } from '../types';
 
-let idCounter = 0;
-export const generateId = () => `temp_${++idCounter}_${Date.now()}`;
+export const generateId = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 const defaultConfig = (): RuleConfig => ({
   conditions: [],
@@ -41,6 +43,13 @@ interface RuleEditorState {
   dependsOn: string[];
   // 规则配置
   config: RuleConfig;
+  // 数据画像上下文（来自上传文件的列信息，供编辑器使用）
+  dataContext: {
+    columnProfiles: Record<string, { distinct_count: number; top_values: unknown[]; sample_values: string[]; null_rate: number; dtype: string }>;
+    previewRows: Record<string, unknown>[];
+    totalRows: number;
+  } | null;
+  setDataContext: (ctx: RuleEditorState['dataContext']) => void;
 
   // 操作
   openEditor: (rule?: Partial<{
@@ -108,6 +117,7 @@ export const useRuleEditorStore = create<RuleEditorState>((set, get) => ({
   description: '',
   dependsOn: [],
   config: defaultConfig(),
+  dataContext: null,
 
   openEditor: (rule?) => {
     if (rule?.id) {
@@ -147,8 +157,10 @@ export const useRuleEditorStore = create<RuleEditorState>((set, get) => ({
 
   resetEditor: () => set({
     open: false, editingId: null, ruleSetId: null, fieldName: '', fieldLabel: '', ruleType: 'mapping',
-    priority: 0, enabled: true, description: '', dependsOn: [], config: defaultConfig(),
+    priority: 0, enabled: true, description: '', dependsOn: [], config: defaultConfig(), dataContext: null,
   }),
+
+  setDataContext: (ctx) => set({ dataContext: ctx }),
 
   setFieldName: (v) => set({ fieldName: v }),
   setFieldLabel: (v) => set({ fieldLabel: v }),

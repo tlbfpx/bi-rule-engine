@@ -50,7 +50,7 @@ class SchedulerManager:
         """初始化 AsyncIOScheduler"""
         if self._scheduler is not None:
             return
-        self._scheduler = AsyncIOScheduler(
+        kwargs = dict(
             timezone=settings.SCHEDULER_TIMEZONE,
             job_defaults={
                 "coalesce": settings.SCHEDULER_COALESCE,
@@ -59,7 +59,9 @@ class SchedulerManager:
             },
         )
         if event_loop:
-            self._scheduler._eventloop = event_loop
+            # 通过 event_loop 参数传给 APScheduler，而非直接操作私有属性
+            kwargs["event_loop"] = event_loop
+        self._scheduler = AsyncIOScheduler(**kwargs)
         logger.info("调度器已初始化")
 
     def start(self):

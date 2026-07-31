@@ -59,8 +59,8 @@ describe('ErrorBoundary 组件', () => {
 
     expect(screen.getByText('页面发生错误')).toBeInTheDocument();
 
-    // 点击重试按钮（Ant Design 按钮文本可能有空格，用 role 查找）
-    const retryButton = screen.getByRole('button');
+    // 点击重试按钮（现在有重试和刷新两个按钮，用 role+name 精确查找）
+    const retryButton = screen.getByRole('button', { name: /重\s*试/ });
     await user.click(retryButton);
 
     // 重试后 ErrorBoundary.hasError 变为 false

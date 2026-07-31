@@ -10,12 +10,12 @@ router = APIRouter(prefix="/logs", tags=["日志上报"])
 
 class FrontendErrorPayload(BaseModel):
     """前端错误上报请求体"""
-    message: str = Field(..., description="错误消息")
-    stack: str | None = Field(None, description="错误堆栈")
-    url: str | None = Field(None, description="出错页面 URL")
-    user_agent: str | None = Field(None, description="浏览器 UA")
-    trace_id: str | None = Field(None, description="前端缓存的 trace_id")
-    timestamp: str | None = Field(None, description="错误发生时间")
+    message: str = Field(..., max_length=2000, description="错误消息")
+    stack: str | None = Field(None, max_length=2000, description="错误堆栈")
+    url: str | None = Field(None, max_length=500, description="出错页面 URL")
+    user_agent: str | None = Field(None, max_length=500, description="浏览器 UA")
+    trace_id: str | None = Field(None, max_length=64, description="前端缓存的 trace_id")
+    timestamp: str | None = Field(None, max_length=64, description="错误发生时间")
 
 
 @router.post("/frontend-error", status_code=204)

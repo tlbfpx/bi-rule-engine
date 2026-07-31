@@ -12,12 +12,12 @@ import { useRuleEditorStore } from '../../stores/ruleStore';
 import ConditionGroupCard from './ConditionGroup';
 import type { ConditionGroup } from '../../types';
 
-function SortableGroup({ group, index }: { group: ConditionGroup; index: number }) {
+function SortableGroup({ group }: { group: ConditionGroup }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: group.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <ConditionGroupCard group={group} index={index} />
+      <ConditionGroupCard group={group} />
     </div>
   );
 }
@@ -53,8 +53,8 @@ export default function ConditionBuilder() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={config.conditions.map((g) => g.id)} strategy={verticalListSortingStrategy}>
-            {config.conditions.map((group, idx) => (
-              <SortableGroup key={group.id} group={group} index={idx} />
+            {config.conditions.map((group) => (
+              <SortableGroup key={group.id} group={group} />
             ))}
           </SortableContext>
         </DndContext>

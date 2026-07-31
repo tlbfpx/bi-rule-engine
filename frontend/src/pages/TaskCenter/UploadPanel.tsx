@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Upload, Button, Table, Typography, Statistic, Row, Col, Card, App, Progress, Tag } from 'antd';
 import { InboxOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useUploadPreview, useUploadExecute } from '../../hooks/useTasks';
+import { useRuleEditorStore } from '../../stores/ruleStore';
 import type { UploadPreviewResult, ExecuteResult } from '../../types';
 
 const { Dragger } = Upload;
@@ -14,6 +15,7 @@ export default function UploadPanel() {
 
   const uploadPreview = useUploadPreview();
   const uploadExecute = useUploadExecute();
+  const setDataContext = useRuleEditorStore((s) => s.setDataContext);
 
   const handleBeforeUpload = (f: File) => {
     const isValid = f.name.endsWith('.csv') || f.name.endsWith('.xlsx') || f.name.endsWith('.xls');
@@ -26,7 +28,17 @@ export default function UploadPanel() {
     setExecuteResult(null);
 
     uploadPreview.mutate(f, {
-      onSuccess: (data) => setPreview(data),
+      onSuccess: (data) => {
+        setPreview(data);
+        // 将列画像推入全局 store，供规则编辑器使用
+        if (data.column_profiles) {
+          setDataContext({
+            columnProfiles: data.column_profiles,
+            previewRows: data.preview_rows,
+            totalRows: data.total_rows,
+          });
+        }
+      },
     });
     return false; // 阻止自动上传
   };
@@ -62,7 +74,9 @@ export default function UploadPanel() {
         <p className="ant-upload-hint">支持 CSV 和 Excel (.xlsx/.xls) 格式</p>
       </Dragger>
 
-      {uploadPreview.isPending && <Progress percent={99} status="active" />}
+      {uploadPreview.isPending && (
+        <Progress percent={50} status="active" strokeColor={{ from: '#1677ff', to: '#52c41a' }} />
+      )}
 
       {preview && (
         <Card title="数据预览" size="small" style={{ marginBottom: 16 }}>

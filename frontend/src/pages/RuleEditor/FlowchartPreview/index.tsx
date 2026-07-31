@@ -47,7 +47,8 @@ function FlowInner() {
   useEffect(() => {
     if (prevType.current !== ruleType) {
       prevType.current = ruleType;
-      requestAnimationFrame(() => fitView({ padding: 0.2 }));
+      const rafId = requestAnimationFrame(() => fitView({ padding: 0.2 }));
+      return () => cancelAnimationFrame(rafId);
     }
   }, [ruleType, fitView]);
 

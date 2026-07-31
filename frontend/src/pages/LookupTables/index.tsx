@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Table, Button, Space, Input, Card, Popconfirm, Typography, App, Drawer,
   Form, Tag, Upload, Row, Col, Divider,
@@ -28,8 +28,9 @@ export default function LookupTables() {
   const [editDesc, setEditDesc] = useState('');
   const [editKeyCol, setEditKeyCol] = useState('');
   const [editValCol, setEditValCol] = useState('');
-  // 可编辑的映射条目
-  const [editEntries, setEditEntries] = useState<{ key: string; value: string }[]>([]);
+  // 可编辑的映射条目（id 用作 React key，避免 index 做 key 导致删除中间项时 DOM 错乱）
+  const [editEntries, setEditEntries] = useState<{ id: string; key: string; value: string }[]>([]);
+  const entryIdRef = useRef(0);
 
   const handleNew = async () => {
     try {
@@ -50,8 +51,8 @@ export default function LookupTables() {
     setEditKeyCol(table.columns?.key_col || 'key');
     setEditValCol(table.columns?.value_col || 'value');
     // 将 data 字典转换为可编辑的条目列表
-    const entries = Object.entries(table.data || {}).map(([k, v]) => ({ key: k, value: String(v) }));
-    setEditEntries(entries.length > 0 ? entries : [{ key: '', value: '' }]);
+    const entries = Object.entries(table.data || {}).map(([k, v]) => ({ id: `e${entryIdRef.current++}`, key: k, value: String(v) }));
+    setEditEntries(entries.length > 0 ? entries : [{ id: `e${entryIdRef.current++}`, key: '', value: '' }]);
     setEditDrawerOpen(true);
   };
 
@@ -80,7 +81,7 @@ export default function LookupTables() {
   };
 
   const addEntry = () => {
-    setEditEntries([...editEntries, { key: '', value: '' }]);
+    setEditEntries([...editEntries, { id: `e${entryIdRef.current++}`, key: '', value: '' }]);
   };
 
   const removeEntry = (idx: number) => {
@@ -252,7 +253,7 @@ export default function LookupTables() {
 
         <div style={{ maxHeight: 400, overflowY: 'auto' }}>
           {editEntries.map((entry, idx) => (
-            <Row key={idx} gutter={8} style={{ marginBottom: 8 }} align="middle">
+            <Row key={entry.id} gutter={8} style={{ marginBottom: 8 }} align="middle">
               <Col span={10}>
                 <Input
                   size="small"

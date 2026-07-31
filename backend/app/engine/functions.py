@@ -1,6 +1,17 @@
-"""内置函数库 — 规则 DSL 中可调用的所有函数"""
+"""[已废弃] 内置函数库 — 规则 DSL 中可调用的所有函数。
+
+此模块已被 formula_engine.py 中的 FUNCS 字典完全取代（双模式 Expr/scalar 实现）。
+保留此文件仅为兼容旧代码引用；新代码请直接使用 formula_engine.FUNCS。
+"""
 import re
 import math
+import warnings
+
+warnings.warn(
+    "app.engine.functions 已废弃，请使用 app.engine.formula_engine.FUNCS",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def fn_split(value: str, delimiter: str, index: int) -> str | None:

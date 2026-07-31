@@ -49,9 +49,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
           title="页面发生错误"
           subTitle={this.state.error?.message || '未知错误'}
           extra={
-            <Button type="primary" onClick={this.handleReset}>
-              重试
-            </Button>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+              <Button type="primary" onClick={this.handleReset}>
+                重试
+              </Button>
+              <Button onClick={() => window.location.reload()}>
+                刷新页面
+              </Button>
+            </div>
           }
         />
       );

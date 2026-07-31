@@ -1,17 +1,63 @@
-"""执行服务 — 把 DataFrame 跑过全部启用规则并落库为 ExecutionTask。
+"""执行服务 — 向下兼容适配层。
 
-文件读取（CSV/XLSX → df）属 HTTP 关注点，留在路由；此处只负责业务执行。
+业务逻辑已迁移到 app.application.services.ExecutionService
+（Template Method + Command Pattern），本模块保留旧函数签名，
+通过创建 Repository 适配器委托到新服务，确保 API 层无需修改。
 """
-import time
+from __future__ import annotations
+
 import polars as pl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.rule import Rule
+from app.application.services.execution_service import (
+    ExecutionService,
+    LookupTableRepository,
+    RuleRepository,
+    TaskRepository,
+)
 from app.models.lookup_table import LookupTable
+from app.models.rule import Rule
 from app.models.task import ExecutionTask
-from app.engine.parser import RuleParser
-from app.engine.executor import RuleExecutor
+
+__all__ = ["execute_dataframe"]
+
+
+class _SqlAlchemyRuleRepository:
+    """规则仓储适配器 — 查询启用规则。"""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def find_all_enabled(self) -> list[Rule]:
+        result = await self._db.execute(
+            select(Rule).where(Rule.enabled == True).order_by(Rule.priority.asc())  # noqa: E712
+        )
+        return result.scalars().all()
+
+
+class _SqlAlchemyLookupTableRepository:
+    """映射表仓储适配器。"""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def find_all(self) -> list[LookupTable]:
+        result = await self._db.execute(select(LookupTable))
+        return result.scalars().all()
+
+
+class _SqlAlchemyTaskRepository:
+    """任务仓储适配器。"""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def save(self, entity: ExecutionTask) -> ExecutionTask:
+        self._db.add(entity)
+        await self._db.flush()
+        await self._db.refresh(entity)
+        return entity
 
 
 async def execute_dataframe(
@@ -19,43 +65,14 @@ async def execute_dataframe(
     df: pl.DataFrame,
     source_name: str,
 ) -> dict:
-    """对 DataFrame 跑全部启用规则，落 ExecutionTask，返回结果摘要 + 预览。"""
-    start_time = time.time()
-    input_rows = len(df)
+    """对 DataFrame 跑全部启用规则，落 ExecutionTask，返回结果摘要 + 预览。
 
-    rules_result = await db.execute(
-        select(Rule).where(Rule.enabled == True).order_by(Rule.priority.asc())  # noqa: E712
+    委托到 ExecutionService.execute_dataframe，保持与旧接口完全兼容。
+    db 参数传递给 Repository 适配器，不再传入 execute_dataframe。
+    """
+    service = ExecutionService(
+        rule_repo=_SqlAlchemyRuleRepository(db),
+        lookup_table_repo=_SqlAlchemyLookupTableRepository(db),
+        task_repo=_SqlAlchemyTaskRepository(db),
     )
-    rules = rules_result.scalars().all()
-    lt_result = await db.execute(select(LookupTable))
-    lookup_tables = {str(t.id): t.data for t in lt_result.scalars().all()}
-
-    rule_configs = [RuleParser.parse_rule(r) for r in rules]
-    executor = RuleExecutor(rule_configs, lookup_tables)
-    result_df, stats = executor.execute(df)
-
-    duration_ms = int((time.time() - start_time) * 1000)
-
-    task = ExecutionTask(
-        task_name=source_name,
-        status="completed",
-        input_rows=input_rows,
-        output_rows=len(result_df),
-        stats=stats.to_dict(),
-        duration_ms=duration_ms,
-    )
-    db.add(task)
-    await db.flush()
-    await db.refresh(task)
-
-    return {
-        "task_id": str(task.id),
-        "status": "completed",
-        "input_rows": input_rows,
-        "output_rows": len(result_df),
-        "error_rows": 0,
-        "stats": stats.to_dict(),
-        "duration_ms": duration_ms,
-        "preview_rows": result_df.head(20).to_dicts(),
-        "columns": result_df.columns,
-    }
+    return await service.execute_dataframe(df, source_name)

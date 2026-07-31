@@ -29,23 +29,21 @@ def topological_sort(rules: list[RuleConfig]) -> list[list[RuleConfig]]:
 
     queue = deque([f for f, d in in_degree.items() if d == 0])
     levels: list[list[RuleConfig]] = []
-    processed: set[str] = set()
+    processed_count = 0
 
     while queue:
         level = []
         for _ in range(len(queue)):
             field = queue.popleft()
-            processed.add(field)
+            processed_count += 1
             level.append(field_to_rule[field])
             for neighbor in graph[field]:
-                if neighbor not in processed:
-                    in_degree[neighbor] -= 1
-                    if in_degree[neighbor] == 0:
-                        queue.append(neighbor)
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    queue.append(neighbor)
         levels.append(level)
 
-    total = sum(len(l) for l in levels)
-    if total != len(rules):
+    if processed_count != len(rules):
         remaining = [f for f, d in in_degree.items() if d > 0]
         raise CyclicDependencyError(remaining)
 

@@ -27,16 +27,16 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncSession:
     """数据库会话依赖注入。
 
-    如果 endpoint 已经自己 commit 了，这里不再重复 commit；
-    如果有未提交的变更，自动提交；异常时自动回滚。
+    事务管理策略：endpoint 内部自行 commit/flush，此处仅在仍有活跃事务时
+    做 fallback commit（覆盖未显式提交的只读查询场景）。异常时自动回滚。
     """
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            # 仅在没有活跃事务时才提交（避免重复提交报错）
-            if session.is_active:
+            # fallback：仅在 session 仍有活跃事务时提交（不与 endpoint 内显式 commit 冲突）
+            if session.in_transaction():
                 await session.commit()
         except Exception:
-            if session.is_active:
+            if session.in_transaction():
                 await session.rollback()
             raise

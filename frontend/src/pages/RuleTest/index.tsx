@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Modal, Button, Table, Input, Space, Typography, Tag, Statistic, Row, Col, App } from 'antd';
 import { PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useTestRule, useRule } from '../../hooks/useRules';
@@ -103,15 +103,17 @@ export default function RuleTestModal({ ruleId, open, onClose }: Props) {
     setTestRows([...testRows, makeEmptyRow()]);
   };
 
-  const handleRemoveRow = (idx: number) => {
-    setTestRows(testRows.filter((_, i) => i !== idx));
-  };
+  const handleRemoveRow = useCallback((idx: number) => {
+    setTestRows((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
 
-  const handleCellChange = (rowIdx: number, field: string, value: string) => {
-    const updated = [...testRows];
-    updated[rowIdx] = { ...updated[rowIdx], [field]: value };
-    setTestRows(updated);
-  };
+  const handleCellChange = useCallback((rowIdx: number, field: string, value: string) => {
+    setTestRows((prev) => {
+      const updated = [...prev];
+      updated[rowIdx] = { ...updated[rowIdx], [field]: value };
+      return updated;
+    });
+  }, []);
 
   const handleRunTest = async () => {
     if (testRows.length === 0) {
@@ -167,7 +169,7 @@ export default function RuleTestModal({ ruleId, open, onClose }: Props) {
     });
 
     return cols;
-  }, [inputFields, testRows]);
+  }, [inputFields, handleCellChange, handleRemoveRow]);
 
   const resultColumns = [
     { title: '#', width: 50, render: (_: unknown, __: unknown, idx: number) => idx + 1 },

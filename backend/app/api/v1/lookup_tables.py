@@ -9,8 +9,22 @@ from app.db import get_db
 from app.models.lookup_table import LookupTable
 from app.schemas.lookup_table import LookupTableCreate, LookupTableUpdate, LookupTableOut
 from app.schemas.common import Page
+from app.config import get_settings
 
 router = APIRouter()
+
+
+async def _read_file_with_size_check(file: UploadFile) -> bytes:
+    """读取上传文件内容并校验大小限制"""
+    settings = get_settings()
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    content = await file.read()
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=422,
+            detail=f"文件大小超过限制（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）",
+        )
+    return content
 
 
 @router.get("", response_model=Page[LookupTableOut])
@@ -23,8 +37,10 @@ async def list_lookup_tables(
     query = select(LookupTable)
     count_query = select(func.count(LookupTable.id))
     if search:
-        query = query.where(LookupTable.name.ilike(f"%{search}%"))
-        count_query = count_query.where(LookupTable.name.ilike(f"%{search}%"))
+        # 转义 LIKE 通配符，防止用户输入 % 或 _ 匹配到意外数据
+        safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.where(LookupTable.name.ilike(f"%{safe_search}%"))
+        count_query = count_query.where(LookupTable.name.ilike(f"%{safe_search}%"))
     total = (await db.execute(count_query)).scalar()
     query = query.order_by(LookupTable.updated_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -49,12 +65,25 @@ async def create_lookup_table(body: LookupTableCreate, db: AsyncSession = Depend
 
 @router.post("/upload", status_code=201, response_model=LookupTableOut)
 async def upload_lookup_table(
-    name: str = Query(...),
+    name: str = Query(..., max_length=200),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    content = await file.read()
-    if file.filename and file.filename.endswith(".csv"):
+    # 文件名安全校验
+    filename = file.filename or ""
+    if "\x00" in filename:
+        raise HTTPException(status_code=400, detail="文件名包含非法字符")
+
+    # 文件类型白名单校验
+    allowed_extensions = (".csv", ".xlsx", ".xls")
+    if not filename.lower().endswith(allowed_extensions):
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型，仅接受 {', '.join(allowed_extensions)}",
+        )
+
+    content = await _read_file_with_size_check(file)
+    if filename.lower().endswith(".csv"):
         df = pl.read_csv(content)
     else:
         df = pl.read_excel(content)

@@ -130,10 +130,12 @@ def _split(val, delimiter, index):
     if not isinstance(val, pl.Expr):
         parts = str(val).split(delimiter) if val else []
         return parts[idx] if 0 <= idx < len(parts) else None
-    # map_elements 虽慢但安全，避免 list.get 越界
-    return val.cast(pl.Utf8).map_elements(
-        lambda s: s.split(delimiter)[idx] if s and len(s.split(delimiter)) > idx else None,
-        return_dtype=pl.Utf8,
+    # 使用 Polars 原生 split + list.get 替代 map_elements，显著提升性能
+    return (
+        val.cast(pl.Utf8)
+        .str.split(delimiter)
+        .list.get(idx, null_on_oob=True)
+        .cast(pl.Utf8)
     )
 
 

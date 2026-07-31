@@ -1,9 +1,10 @@
 """规则管理 API"""
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from loguru import logger
 
+from app.core.exceptions import NotFoundException
 from app.db import get_db
 from app.models.rule import Rule
 from app.schemas.rule import RuleCreate, RuleUpdate, RuleTestRequest, BatchPriorityUpdate, RuleOut
@@ -16,7 +17,7 @@ router = APIRouter()
 @router.get("", response_model=Page[RuleOut])
 async def list_rules(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(20, ge=1, le=100),
     field_name: str | None = None,
     rule_type: str | None = None,
     enabled: bool | None = None,
@@ -91,7 +92,7 @@ async def get_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).where(Rule.id == rule_id))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="规则不存在")
+        raise NotFoundException(detail="规则不存在")
     return rule
 
 
@@ -100,7 +101,7 @@ async def update_rule(rule_id: str, body: RuleUpdate, db: AsyncSession = Depends
     result = await db.execute(select(Rule).where(Rule.id == rule_id))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="规则不存在")
+        raise NotFoundException(detail="规则不存在")
     update_data = body.model_dump(exclude_unset=True)
     if "config" in update_data and hasattr(update_data.get("config"), "model_dump"):
         update_data["config"] = update_data["config"].model_dump()
@@ -117,7 +118,7 @@ async def delete_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Rule).where(Rule.id == rule_id))
     rule = result.scalar_one_or_none()
     if not rule:
-        raise HTTPException(status_code=404, detail="规则不存在")
+        raise NotFoundException(detail="规则不存在")
     await db.delete(rule)
     logger.info(f"删除规则: {rule.field_name}")
 

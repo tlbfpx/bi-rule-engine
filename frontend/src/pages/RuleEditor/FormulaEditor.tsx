@@ -1,4 +1,4 @@
-import { Typography } from 'antd';
+import { Typography, App } from 'antd';
 import Editor from '@monaco-editor/react';
 import { useRuleEditorStore } from '../../stores/ruleStore';
 
@@ -11,6 +11,16 @@ const BUILTIN_FUNCTIONS = [
 
 export default function FormulaEditor() {
   const { config, setFormulaExpression } = useRuleEditorStore();
+  const { message } = App.useApp();
+
+  const handleInsertFn = (fn: string) => {
+    // 提取函数名（括号前的部分）
+    const fnName = fn.split('(')[0];
+    const current = config.formula_expression || '';
+    const separator = current && !current.endsWith(' ') ? ' ' : '';
+    setFormulaExpression(current + separator + fnName + '()');
+    message.success(`已插入 ${fnName}()`);
+  };
 
   return (
     <div style={{ display: 'flex', gap: 12 }}>
@@ -37,18 +47,22 @@ export default function FormulaEditor() {
 
       {/* 函数参考 */}
       <div style={{ width: 240, flexShrink: 0 }}>
-        <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>可用函数</Typography.Text>
+        <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>可用函数（点击插入）</Typography.Text>
         <div style={{ background: '#fafafa', borderRadius: 6, padding: 12, maxHeight: 280, overflow: 'auto' }}>
-          {BUILTIN_FUNCTIONS.map((fn) => (
-            <Typography.Text
-              key={fn}
-              code
-              style={{ display: 'block', marginBottom: 6, fontSize: 12, cursor: 'pointer' }}
-              title="点击复制"
-            >
-              {fn}
-            </Typography.Text>
-          ))}
+          {BUILTIN_FUNCTIONS.map((fn) => {
+            const fnName = fn.split('(')[0];
+            return (
+              <Typography.Text
+                key={fn}
+                code
+                style={{ display: 'block', marginBottom: 6, fontSize: 12, cursor: 'pointer' }}
+                title={`点击插入 ${fnName}()`}
+                onClick={() => handleInsertFn(fn)}
+              >
+                {fn}
+              </Typography.Text>
+            );
+          })}
         </div>
       </div>
     </div>

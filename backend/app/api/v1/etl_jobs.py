@@ -16,9 +16,13 @@ router = APIRouter()
 
 
 def _is_valid_cron(cron: str) -> bool:
-    """简单校验 cron 表达式：5 个字段"""
-    parts = cron.strip().split()
-    return len(parts) == 5
+    """使用 APScheduler 的 CronTrigger 真实解析校验 cron 表达式。"""
+    try:
+        from apscheduler.triggers.cron import CronTrigger
+        CronTrigger.from_crontab(cron)
+        return True
+    except (ValueError, KeyError):
+        return False
 
 
 @router.post("", status_code=201, response_model=ETLJobOut)
@@ -52,7 +56,7 @@ async def create_etl_job(body: ETLJobCreate, db: AsyncSession = Depends(get_db))
 @router.get("", response_model=Page[ETLJobOut])
 async def list_etl_jobs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(ETLJob)
@@ -77,7 +81,7 @@ async def get_etl_job_run(run_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/runs", response_model=Page[ETLJobRunOut])
 async def list_all_etl_job_runs(
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
@@ -190,7 +194,7 @@ async def toggle_etl_job(job_id: str, enabled: bool, db: AsyncSession = Depends(
 async def list_etl_job_runs(
     job_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(ETLJobRun).where(ETLJobRun.etl_job_id == job_id)

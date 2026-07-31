@@ -191,9 +191,7 @@ RULES_JSON = [
         "priority": 10, "enabled": True,
         "config": {
             "formula_expression": (
-                "pl.when(pl.col('company_segment_code').is_in(['930000', '840000']))"
-                ".then(pl.col('sum_fin_rev'))"
-                ".otherwise((pl.col('sum_fin_rev') * (1 + pl.col('rate_2'))).round(2))"
+                "IF(company_segment_code IN ('930000', '840000'), sum_fin_rev, ROUND(sum_fin_rev * (1 + rate_2), 2))"
             )
         },
         "depends_on": ["company_segment_code", "rate_2"],
@@ -207,9 +205,7 @@ RULES_JSON = [
         "priority": 11, "enabled": True,
         "config": {
             "formula_expression": (
-                "pl.when(pl.col('pay_amount') > pl.col('sum_fin_ar'))"
-                ".then(pl.col('pay_amount').fill_null(0) - pl.col('sum_fin_ar'))"
-                ".otherwise(pl.lit(0))"
+                "IF(pay_amount > sum_fin_ar, COALESCE(pay_amount, 0) - sum_fin_ar, 0)"
             )
         },
         "depends_on": ["sum_fin_ar"],
@@ -239,7 +235,9 @@ def test_mapping_rule():
     result, stats = executor.execute(df)
     expected = [0.0, 0.0, 0.06, 0.06, 0.06]
     actual = result["rate_2"].to_list()
-    assert actual[:4] == expected[:4], f"rate_2 映射失败: {actual}"
+    assert len(actual) == len(expected), f"行数不匹配: {len(actual)} vs {len(expected)}"
+    for i, (a, e) in enumerate(zip(actual, expected)):
+        assert a == e, f"rate_2[{i}] 映射失败: 期望 {e}, 实际 {a}"
     print(f"✅ rate_2 条件映射: {actual}")
 
 
@@ -252,7 +250,14 @@ def test_cleaning_rule():
     })
     executor = RuleExecutor([rule])
     result, stats = executor.execute(df)
-    print(f"✅ gmt_effect_end 清洗: {result['gmt_effect_end'].to_list()}")
+    actual = result["gmt_effect_end"].to_list()
+    # fill_null: 第一行 partner_name 有值 → 取 partner_name
+    assert actual[0] == "上海好医", f"fill_null 失败: {actual[0]}"
+    # replace: 第二行 partner_name 匹配 → 替换为新值
+    assert actual[1] == "上海平安好医创智门诊部有限公司", f"replace 失败: {actual[1]}"
+    # 第三行不匹配任何条件，保持原值
+    assert actual[2] == "正常账户", f"不匹配行应保持原值: {actual[2]}"
+    print(f"✅ gmt_effect_end 清洗: {actual}")
 
 
 def test_computed_rule():
@@ -269,9 +274,28 @@ def test_computed_rule():
     })
     executor = RuleExecutor(rules)
     result, stats = executor.execute(df)
-    print(f"  rate_2: {result['rate_2'].to_list()}")
-    print(f"  sum_fin_ar: {result['sum_fin_ar'].to_list()}")
-    print(f"  ar_balance: {result['ar_balance'].to_list()}")
+    rate_2 = result["rate_2"].to_list()
+    sum_fin_ar = result["sum_fin_ar"].to_list()
+    ar_balance = result["ar_balance"].to_list()
+
+    # rate_2: 930000→0, 其他→0.06
+    assert rate_2[0] == 0.0, f"rate_2[0] 应为 0: {rate_2[0]}"
+    assert rate_2[1] == 0.06, f"rate_2[1] 应为 0.06: {rate_2[1]}"
+    assert rate_2[2] == 0.06, f"rate_2[2] 应为 0.06: {rate_2[2]}"
+
+    # sum_fin_ar: 930000 取 sum_fin_rev 原值；其他 = rev * (1 + rate_2)
+    assert sum_fin_ar[0] == 1000.0, f"sum_fin_ar[0] 应为 1000: {sum_fin_ar[0]}"
+    assert sum_fin_ar[1] == 2120.0, f"sum_fin_ar[1] 应为 2000*1.06=2120: {sum_fin_ar[1]}"
+    assert sum_fin_ar[2] == 3180.0, f"sum_fin_ar[2] 应为 3000*1.06=3180: {sum_fin_ar[2]}"
+
+    # ar_balance: pay_amount > sum_fin_ar 时取差值，否则 0
+    assert ar_balance[0] == 0, f"ar_balance[0] 应为 0 (500 < 1000): {ar_balance[0]}"
+    assert ar_balance[1] == 380.0, f"ar_balance[1] 应为 2500-2120=380: {ar_balance[1]}"
+    assert ar_balance[2] == 0, f"ar_balance[2] 应为 0 (2000 < 3180): {ar_balance[2]}"
+
+    print(f"  rate_2: {rate_2}")
+    print(f"  sum_fin_ar: {sum_fin_ar}")
+    print(f"  ar_balance: {ar_balance}")
     print("✅ 公式计算链测试通过")
 
 
@@ -295,6 +319,42 @@ def test_full_pipeline():
 
     executor = RuleExecutor(rules, lookup_tables={})
     result, stats = executor.execute(df)
+
+    # ── 关键断言 ──
+    # 1. company_segment_code: 清洗 fill_null(None→"972400")
+    csc = result["company_segment_code"].to_list()
+    assert csc[2] == "972400", f"company_segment_code fill_null 失败: {csc[2]}"
+
+    # 2. rate_2: 930000→0, 其他→0.06
+    r2 = result["rate_2"].to_list()
+    assert r2[0] == 0.0, f"rate_2[0] 应为 0: {r2[0]}"
+    assert r2[1] == 0.06, f"rate_2[1] 应为 0.06: {r2[1]}"
+
+    # 3. prod_class: 第一行和第三行同时匹配 card_name+eorder_name → "集团体检"(cg_002)
+    pc = result["prod_class"].to_list()
+    assert pc[0] == "集团体检", f"prod_class[0] 匹配失败: {pc[0]}"
+    assert pc[2] == "集团体检", f"prod_class[2] 匹配失败: {pc[2]}"
+    # 第二行 card_product_seg_name 有值 → 直接取值(cg_001)
+    assert pc[1] == "团体体检", f"prod_class[1] 应取 card_product_seg_name: {pc[1]}"
+
+    # 4. if_reject: prod_class 含"团体体检"才不剔除；row0/row2 prod_class=集团体检 → "剔除"
+    ir = result["if_reject"].to_list()
+    assert ir[0] == "剔除", f"if_reject[0] 应为剔除(集团体检≠团体体检): {ir[0]}"
+    assert ir[1] == "不剔除", f"if_reject[1] 应为不剔除(prod_class=团体体检): {ir[1]}"
+
+    # 5. buyer_name: 宁波→971500, 广东→970200, 未知→None
+    bn = result["buyer_name"].to_list()
+    assert bn[0] == "971500", f"buyer_name[0] 映射失败: {bn[0]}"
+    assert bn[1] == "970200", f"buyer_name[1] 映射失败: {bn[1]}"
+
+    # 6. is_spec_reject: 合同 ID 匹配 → "是"
+    isr = result["is_spec_reject"].to_list()
+    assert isr[0] == "是", f"is_spec_reject[0] 应为是: {isr[0]}"
+
+    # 7. sum_fin_ar: 930000 取原值 1000, 其他 = rev * 1.06
+    sfa = result["sum_fin_ar"].to_list()
+    assert sfa[0] == 1000.0, f"sum_fin_ar[0] 应为 1000: {sfa[0]}"
+    assert sfa[1] == 2120.0, f"sum_fin_ar[1] 应为 2120: {sfa[1]}"
 
     print("\n=== 完整流水线结果 ===")
     for col in result.columns:
