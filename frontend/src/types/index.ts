@@ -63,6 +63,7 @@ export interface Rule {
   depends_on: string[];
   description: string | null;
   created_by: string | null;
+  config_errors: string[];
   created_at: string;
   updated_at: string;
 }

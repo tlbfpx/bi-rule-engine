@@ -116,5 +116,6 @@ class RuleOut(BaseModel):
     description: Optional[str] = None
     created_by: Optional[str] = None
     rule_set_name: Optional[str] = None  # 仅 list 端点由路由注入
+    config_errors: list[str] = Field(default_factory=list)  # 仅 list 端点由路由注入
     created_at: datetime
     updated_at: datetime

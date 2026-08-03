@@ -138,7 +138,7 @@ export default function UploadPanel() {
               <Statistic title="输出行数" value={executeResult.output_rows.toLocaleString()} />
             </Col>
             <Col span={6}>
-              <Statistic title="错误行数" value={executeResult.error_rows} valueStyle={{ color: executeResult.error_rows > 0 ? '#ff4d4f' : undefined }} />
+              <Statistic title="错误行数" value={executeResult.error_rows} styles={{ content: { color: executeResult.error_rows > 0 ? '#ff4d4f' : undefined } }} />
             </Col>
             <Col span={6}>
               <Statistic title="耗时" value={`${(executeResult.duration_ms / 1000).toFixed(2)}s`} />

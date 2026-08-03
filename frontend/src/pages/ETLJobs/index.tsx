@@ -46,7 +46,7 @@ export default function ETLJobs() {
     {
       title: '任务名称', dataIndex: 'job_name', key: 'job_name', width: 180, ellipsis: true,
       render: (name: string, record: ETLJob) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <span style={{ fontWeight: 500 }}>{name}</span>
           {record.description && (
             <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
@@ -201,7 +201,7 @@ export default function ETLJobs() {
         onCancel={() => setRunHistoryJobId(null)}
         width={1100}
         footer={null}
-        destroyOnClose
+        destroyOnHidden
       >
         {runHistoryJobId && <ETLJobRunList jobId={runHistoryJobId} />}
       </Modal>
@@ -241,10 +241,10 @@ function ETLJobDrawer({ open, onClose, initial }: { open: boolean; onClose: () =
   return (
     <Drawer
       title={isEdit ? '编辑 ETL 任务' : '新建 ETL 任务'}
-      width={560}
+      size="large"
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space style={{ float: 'right' }}>
           <Button onClick={onClose}>取消</Button>

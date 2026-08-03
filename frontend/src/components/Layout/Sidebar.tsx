@@ -68,7 +68,7 @@ export default function Sidebar() {
             padding: '0 16px',
           }}
         >
-          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={4}>
             <Typography.Text style={{ color: '#aaa', fontSize: 12, display: 'block', textAlign: 'center' }}>
               {username || '未知用户'}
             </Typography.Text>

@@ -19,7 +19,7 @@ export default function LookupConfig() {
 
   return (
     <div>
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         <div>
           <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>选择映射表</Typography.Text>
           <Select

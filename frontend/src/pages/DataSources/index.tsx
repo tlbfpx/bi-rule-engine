@@ -155,10 +155,10 @@ function DataSourceDrawer({ open, onClose, initial }: { open: boolean; onClose: 
   return (
     <Drawer
       title={isEdit ? '编辑数据源' : '新建数据源'}
-      width={560}
+      size="large"
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space style={{ float: 'right' }}>
           <Button onClick={handleTest} loading={testConn.isPending}>测试连接</Button>

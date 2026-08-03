@@ -215,7 +215,7 @@ export default function LookupTables() {
         title="编辑映射表"
         open={editDrawerOpen}
         onClose={() => setEditDrawerOpen(false)}
-        width={700}
+        size="large"
         extra={
           <Button type="primary" onClick={handleSaveEdit} loading={updateTable.isPending}>
             保存

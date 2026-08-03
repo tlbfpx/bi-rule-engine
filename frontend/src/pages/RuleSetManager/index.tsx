@@ -123,7 +123,7 @@ export default function RuleSetManager() {
                       <div style={{ marginBottom: 12, color: '#666', minHeight: 40 }}>
                         {rs.description || '暂无描述'}
                       </div>
-                      <Statistic title="规则数量" value={rs.rule_count ?? 0} valueStyle={{ fontSize: 24 }} />
+                      <Statistic title="规则数量" value={rs.rule_count ?? 0} styles={{ content: { fontSize: 24 } }} />
                     </div>
                   }
                 />
@@ -139,7 +139,7 @@ export default function RuleSetManager() {
         onCancel={closeModal}
         onOk={handleSubmit}
         confirmLoading={createRuleSet.isPending || updateRuleSet.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item

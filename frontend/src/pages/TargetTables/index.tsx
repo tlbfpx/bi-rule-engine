@@ -147,10 +147,10 @@ function TargetTableDrawer({ open, onClose, initial }: { open: boolean; onClose:
   return (
     <Drawer
       title={isEdit ? '编辑目标表' : '新建目标表'}
-      width={560}
+      size="large"
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space style={{ float: 'right' }}>
           <Button onClick={handleTest} loading={testConn.isPending}>测试连接</Button>

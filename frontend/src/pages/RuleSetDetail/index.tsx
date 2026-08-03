@@ -30,7 +30,7 @@ export default function RuleSetDetail() {
           {
             key: 'rules',
             label: '规则配置',
-            children: <RuleList ruleSetId={id} />,
+            children: <RuleList ruleSetId={id} ruleSetName={ruleSet?.name} />,
           },
           {
             key: 'dag',

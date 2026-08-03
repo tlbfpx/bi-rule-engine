@@ -6,11 +6,12 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined,
   ExperimentOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  ApartmentOutlined,
+  ApartmentOutlined, DownloadOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useRules, useDeleteRule, useUpdateRule, useBatchPriority } from '../../hooks/useRules';
+import { rulesApi } from '../../api/rules';
 import { useAllRuleSets } from '../../hooks/useRuleSets';
 import { useRuleEditorStore } from '../../stores/ruleStore';
 import type { Rule, RuleType } from '../../types';
@@ -28,9 +29,10 @@ const FILTER_TYPE_OPTIONS: { value: RuleType | ''; label: string }[] = [
 
 interface RuleListProps {
   ruleSetId?: string;
+  ruleSetName?: string;
 }
 
-export default function RuleList({ ruleSetId }: RuleListProps = {}) {
+export default function RuleList({ ruleSetId, ruleSetName }: RuleListProps = {}) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -59,6 +61,20 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
   const [testRuleId, setTestRuleId] = useState<string | null>(null);
   // 跟踪正在更新中的规则 ID，只对对应行显示 loading
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // 导出状态
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (!ruleSetId || exporting) return;
+    setExporting(true);
+    try {
+      await rulesApi.exportExcel(ruleSetId, ruleSetName);
+    } catch {
+      // 错误由 rulesApi 内部处理
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleToggle = async (rule: Rule) => {
     setTogglingId(rule.id);
@@ -111,6 +127,26 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
       key: 'field_label',
       width: 140,
       ellipsis: true,
+    },
+    {
+      title: '',
+      key: 'warnings',
+      width: 40,
+      render: (_: unknown, r: Rule) => {
+        if (!r.config_errors?.length) return null;
+        const errList = (
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {r.config_errors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        );
+        return (
+          <Tooltip title={errList} color="gold" overlayStyle={{ maxWidth: 360 }}>
+            <WarningOutlined style={{ color: '#faad14', fontSize: 16 }} />
+          </Tooltip>
+        );
+      },
     },
     {
       title: '规则类型',
@@ -249,6 +285,11 @@ export default function RuleList({ ruleSetId }: RuleListProps = {}) {
             <Button icon={<ApartmentOutlined />} onClick={() => navigate('/dag')}>
               依赖视图
             </Button>
+            {ruleSetId && (
+              <Button icon={<DownloadOutlined />} onClick={handleExport} loading={exporting}>
+                导出 Excel
+              </Button>
+            )}
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor(ruleSetId ? { rule_set_id: ruleSetId } : undefined)}>
               新建规则
             </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Drawer, Button, Space, Divider, App } from 'antd';
+import { Drawer, Button, Space, Divider, App, Modal } from 'antd';
 import { useRuleEditorStore } from '../../stores/ruleStore';
 import { useRules, useCreateRule, useUpdateRule } from '../../hooks/useRules';
 import { useAllRuleSets } from '../../hooks/useRuleSets';
@@ -10,6 +10,74 @@ import CleaningConfig from './CleaningConfig';
 import LookupConfig from './LookupConfig';
 import FormulaEditor from './FormulaEditor';
 import FlowchartPreview from './FlowchartPreview';
+import type { RuleConfig, RuleType } from '../../types';
+
+/** 前端配置完整性校验，与后端 validate_rule_config 保持一致 */
+function validateConfigBeforeSave(
+  ruleType: RuleType,
+  config: RuleConfig,
+): string[] {
+  const errors: string[] = [];
+
+  if (ruleType === 'mapping') {
+    const groups = config.conditions || [];
+    if (groups.length === 0) {
+      errors.push('至少需要 1 个条件组');
+      return errors;
+    }
+
+    let hasResult = false;
+    for (let gi = 0; gi < groups.length; gi++) {
+      const g = groups[gi];
+      const gp = `条件组${gi + 1}`;
+      const rows = g.rows || [];
+
+      if (rows.length === 0) {
+        errors.push(`${gp}: 至少需要 1 个条件行`);
+        continue;
+      }
+
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        const rp = `${gp}/行${ri + 1}`;
+        if (!row.field) errors.push(`${rp}: 字段名未填写`);
+        if (!row.operator) errors.push(`${rp}: 操作符未选择`);
+        const op = row.operator || '';
+        const val = row.value;
+        if (op !== 'is_null' && op !== 'is_not_null' && (val === null || val === undefined || val === '')) {
+          errors.push(`${rp}: 比较值未填写`);
+        }
+      }
+
+      if (g.result_value !== null && g.result_value !== undefined && g.result_value !== '') {
+        hasResult = true;
+      }
+    }
+
+    // 检查兜底值
+    const hasDefault =
+      config.default_result !== null &&
+      config.default_result !== undefined &&
+      config.default_result !== '';
+    if (!hasResult && !hasDefault) {
+      errors.push('所有条件组均未设置结果值，且没有默认值兜底');
+    }
+  } else if (ruleType === 'cleaning') {
+    if (!config.cleaning_steps?.length) {
+      errors.push('至少需要 1 个清洗步骤');
+    }
+  } else if (ruleType === 'lookup') {
+    if (!config.lookup_table_id) errors.push('需要选择字典表');
+    if (!config.lookup_key_field) errors.push('需要指定匹配键字段');
+    if (!config.lookup_value_field) errors.push('需要指定取值字段');
+  } else if (ruleType === 'computed') {
+    if (!config.formula_expression?.trim()) {
+      errors.push('需要填写计算公式');
+    }
+  }
+
+  return errors;
+}
 
 export default function RuleEditorDrawer() {
   const open = useRuleEditorStore((s) => s.open);
@@ -81,6 +149,21 @@ export default function RuleEditorDrawer() {
       return;
     }
 
+    // 校验配置完整性
+    const errors = validateConfigBeforeSave(ruleType, config);
+    if (errors.length > 0) {
+      Modal.warning({
+        title: '规则配置不完整',
+        content: (
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {errors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        ),
+        okText: '返回修改',
+      });
+      return;
+    }
+
     const payload = {
       rule_set_id: ruleSetId || undefined,
       field_name: fieldName,
@@ -123,8 +206,8 @@ export default function RuleEditorDrawer() {
       }
       open={open}
       onClose={resetEditor}
-      width={900}
-      destroyOnClose
+      size="large"
+      destroyOnHidden
       extra={
         <Space>
           <Button onClick={resetEditor}>取消</Button>

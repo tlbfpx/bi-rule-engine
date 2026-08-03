@@ -205,7 +205,7 @@ export default function RuleTestModal({ ruleId, open, onClose }: Props) {
       onCancel={handleClose}
       width={Math.max(900, 200 + inputFields.length * 160)}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ marginBottom: 16 }}>
         <Space style={{ marginBottom: 12, justifyContent: 'space-between', width: '100%' }}>
@@ -249,13 +249,13 @@ export default function RuleTestModal({ ruleId, open, onClose }: Props) {
               <Statistic title="总行数" value={result.summary.total} />
             </Col>
             <Col span={6}>
-              <Statistic title="命中" value={result.summary.matched} valueStyle={{ color: '#52c41a' }} />
+              <Statistic title="命中" value={result.summary.matched} styles={{ content: { color: '#52c41a' } }} />
             </Col>
             <Col span={6}>
-              <Statistic title="默认值" value={result.summary.defaulted} valueStyle={{ color: '#faad14' }} />
+              <Statistic title="默认值" value={result.summary.defaulted} styles={{ content: { color: '#faad14' } }} />
             </Col>
             <Col span={6}>
-              <Statistic title="错误" value={result.summary.errors} valueStyle={{ color: '#ff4d4f' }} />
+              <Statistic title="错误" value={result.summary.errors} styles={{ content: { color: '#ff4d4f' } }} />
             </Col>
           </Row>
           <Table
