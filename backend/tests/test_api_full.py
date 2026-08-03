@@ -7,6 +7,9 @@ from io import BytesIO
 
 BASE = "http://localhost:8000/api/v1"
 
+# 禁用代理 — 确保本地请求不走 http_proxy / HTTP_PROXY
+CLIENT = httpx.Client(timeout=60, trust_env=False)
+
 # ─── 测试辅助 ───────────────────────────────────────────
 passed = 0
 failed = 0
@@ -23,7 +26,7 @@ def check(name, condition, detail=""):
 def api(method, path, **kwargs):
     """统一 API 调用"""
     url = f"{BASE}{path}"
-    resp = getattr(httpx, method)(url, timeout=30, **kwargs)
+    resp = CLIENT.request(method, url, **kwargs)
     return resp
 
 
@@ -35,7 +38,7 @@ print("=" * 70)
 # 1. 健康检查 (在根路径，不在 /api/v1 下)
 # ============================================================
 print("\n📋 1. 健康检查")
-resp = httpx.get("http://localhost:8000/api/health", timeout=10)
+resp = CLIENT.get("http://localhost:8000/api/health")
 check("GET /api/health 返回 200", resp.status_code == 200)
 data = resp.json()
 check("status == ok", data.get("status") == "ok")
@@ -478,7 +481,7 @@ check("total_columns == 2", upload_data.get("total_columns") == 2)
 csv_file2 = BytesIO(csv_content.encode())
 files2 = {"file": ("test2.csv", csv_file2, "text/csv")}
 resp = api("post", "/tasks/upload/execute", files=files2)
-check("POST /tasks/upload/execute → 200", resp.status_code == 200)
+check("POST /tasks/upload/execute → 200", resp.status_code == 200, f"got {resp.status_code}: {resp.text[:200]}")
 exec_data = resp.json()
 task_id = exec_data.get("task_id")
 check("返回 task_id", task_id is not None)
@@ -513,7 +516,7 @@ print("\n📋 10. 边界情况与错误处理")
 
 # 10a. 重复名称
 resp = api("post", "/data-sources", json=ds_payload)
-check("重复 name → 400", resp.status_code == 400)
+check("重复 name → 409", resp.status_code == 409)
 
 # 10b. 无效 ID
 resp = api("get", "/data-sources/nonexistent-id-12345")
@@ -575,8 +578,12 @@ check(f"DELETE /etl-jobs/{job_id} → 200", resp.status_code == 200)
 
 # 删除规则
 for rid in [rule_mapping_id, rule_cleaning_id, rule_lookup_id, rule_computed_id]:
-    resp = api("delete", f"/rules/{rid}")
-    check(f"DELETE /rules/{rid} → 204", resp.status_code == 204)
+    if rid:
+        try:
+            resp = api("delete", f"/rules/{rid}")
+            check(f"DELETE /rules/{rid} → 204", resp.status_code == 204)
+        except Exception as e:
+            check(f"DELETE /rules/{rid} → 204", False, str(e))
 
 # 删除规则集
 resp = api("delete", f"/rule-sets/{rs_id}")

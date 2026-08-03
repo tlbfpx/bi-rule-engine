@@ -79,10 +79,10 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
 @router.put("/batch-priority")
 async def batch_update_priority(body: BatchPriorityUpdate, db: AsyncSession = Depends(get_db)):
     for item in body.items:
-        result = await db.execute(select(Rule).where(Rule.id == item["id"]))
+        result = await db.execute(select(Rule).where(Rule.id == item.id))
         rule = result.scalar_one_or_none()
         if rule:
-            rule.priority = item["priority"]
+            rule.priority = item.priority
     await db.flush()
     return {"message": "ok", "count": len(body.items)}
 

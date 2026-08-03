@@ -209,6 +209,9 @@ def _heartbeat_loop(run_id: str, stop_event: threading.Event, interval: int = 30
                 logger.debug(f"心跳更新失败 [run={run_id}]: {e}")
     finally:
         sync_engine.dispose()
+
+
+def _safe_identifier(name: str, context: str = "identifier") -> str:
     """验证标识符安全，防止 SQL 注入"""
     if not _SAFE_IDENTIFIER.match(name):
         raise ValueError(f"不合法的{context}: {name}")

@@ -1,7 +1,7 @@
 """ETL 调度任务 API"""
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from loguru import logger
 
 from app.db import get_db
@@ -140,6 +140,8 @@ async def delete_etl_job(job_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="ETL 任务不存在")
 
     await scheduler_manager.remove_job(job_id)
+    # 先删除关��的执行记录，避免 FK 约束报错
+    await db.execute(delete(ETLJobRun).where(ETLJobRun.etl_job_id == job_id))
     await db.delete(job)
     logger.info(f"删除 ETL 任务: {job.job_name}")
     return {"id": job_id}

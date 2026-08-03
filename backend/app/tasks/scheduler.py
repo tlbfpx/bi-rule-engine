@@ -35,6 +35,22 @@ def _parse_cron(cron_expression: str) -> dict:
     }
 
 
+async def _run_etl_job_wrapper(job_id: str):
+    """调度器触发时调用 — 生成独立 trace_id 与用户请求隔离
+
+    必须是模块级函数而非绑定方法，否则 APScheduler DB jobstore
+    序列化 job 时会尝试 pickle SchedulerManager 实例（持有 scheduler
+    引用，不可序列化）。
+    """
+    trace_id = generate_trace_id()
+    set_trace_id(trace_id)
+    logger.info(f"调度器触发 ETL 任务: {job_id}")
+    try:
+        await run_etl_job(job_id, trace_id=trace_id)
+    except Exception as e:
+        logger.exception(f"调度器执行 ETL 任务失败 [job={job_id}]: {e}")
+
+
 class SchedulerManager:
     """调度器管理器"""
 
@@ -104,7 +120,7 @@ class SchedulerManager:
             timezone=job.timezone or settings.SCHEDULER_TIMEZONE,
         )
         self._scheduler.add_job(
-            func=self._run_etl_job_wrapper,
+            func=_run_etl_job_wrapper,
             trigger=trigger,
             id=job_id,
             name=job.job_name,
@@ -132,16 +148,6 @@ class SchedulerManager:
             await self.remove_job(job.id)
             return
         await self.add_job(job)
-
-    async def _run_etl_job_wrapper(self, job_id: str):
-        """调度器触发时调用 — 生成独立 trace_id 与用户请求隔离"""
-        trace_id = generate_trace_id()
-        set_trace_id(trace_id)
-        logger.info(f"调度器触发 ETL 任务: {job_id}")
-        try:
-            await run_etl_job(job_id, trace_id=trace_id)
-        except Exception as e:
-            logger.exception(f"调度器执行 ETL 任务失败 [job={job_id}]: {e}")
 
 
 scheduler_manager = SchedulerManager()
