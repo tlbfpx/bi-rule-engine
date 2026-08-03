@@ -12,9 +12,10 @@ import { countMatches, formatMatchCount } from '../../utils/conditionMatcher';
 
 interface Props {
   group: ConditionGroup;
+  ruleSetFields?: string[];
 }
 
-export default function ConditionGroupCard({ group }: Props) {
+export default function ConditionGroupCard({ group, ruleSetFields }: Props) {
   const { updateConditionGroup, removeConditionGroup, addConditionRow, removeConditionRow, updateConditionRow } =
     useRuleEditorStore();
   const dataContext = useRuleEditorStore((s) => s.dataContext);
@@ -26,11 +27,12 @@ export default function ConditionGroupCard({ group }: Props) {
     return formatMatchCount(matched, dataContext.previewRows.length, dataContext.totalRows);
   }, [group, dataContext]);
 
-  // 从数据画像中提取可用字段列表
-  const availableFields = useMemo(
-    () => (dataContext?.columnProfiles ? Object.keys(dataContext.columnProfiles) : undefined),
-    [dataContext?.columnProfiles],
-  );
+  // 合并数据源列和同业务线已有规则的字段名
+  const allAvailableFields = useMemo(() => {
+    const dsFields = dataContext?.columnProfiles ? Object.keys(dataContext.columnProfiles) : [];
+    const rsFields = ruleSetFields ?? [];
+    return Array.from(new Set([...dsFields, ...rsFields]));
+  }, [dataContext?.columnProfiles, ruleSetFields]);
 
   const handleAddRow = () => addConditionRow(group.id);
   const handleRemoveRow = (rowId: string) => removeConditionRow(group.id, rowId);
@@ -82,7 +84,7 @@ export default function ConditionGroupCard({ group }: Props) {
               onChange={(v) => updateConditionRow(group.id, row.id, { field: v })}
               placeholder="字段名"
               style={{ width: 180 }}
-              availableFields={availableFields}
+              availableFields={allAvailableFields}
               columnProfiles={dataContext?.columnProfiles}
             />
             <OperatorSelect
@@ -144,7 +146,7 @@ export default function ConditionGroupCard({ group }: Props) {
               onChange={(v) => updateConditionGroup(group.id, { result_value: v })}
               placeholder="选择字段"
               style={{ width: 180 }}
-              availableFields={availableFields}
+              availableFields={allAvailableFields}
               columnProfiles={dataContext?.columnProfiles}
             />
           )}

@@ -7,10 +7,11 @@ function invalidateRules(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['rules'], exact: false });
 }
 
-export function useRules(params?: { page?: number; page_size?: number; field_name?: string; rule_type?: string; enabled?: boolean; rule_set_id?: string }) {
+export function useRules(params?: { page?: number; page_size?: number; field_name?: string; rule_type?: string; enabled?: boolean; rule_set_id?: string }, queryOpts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['rules', params],
     queryFn: () => rulesApi.list(params),
+    ...queryOpts,
   });
 }
 

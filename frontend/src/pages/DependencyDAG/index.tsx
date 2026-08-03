@@ -61,7 +61,7 @@ export default function DependencyDAG({ ruleSetId }: DependencyDAGProps = {}) {
   const { data: ruleSetsData } = useAllRuleSets();
   const ruleSets = ruleSetsData?.items || [];
   const selectedRuleSet = ruleSets.find((rs) => rs.id === effectiveRuleSetId);
-  const { data, isLoading } = useRules({ page_size: 200, rule_set_id: effectiveRuleSetId });
+  const { data, isLoading } = useRules({ page_size: 100, rule_set_id: effectiveRuleSetId });
 
   const rules = data?.items || [];
 

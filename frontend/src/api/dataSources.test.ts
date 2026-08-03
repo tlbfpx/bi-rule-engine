@@ -116,29 +116,29 @@ describe('dataSourcesApi', () => {
   });
 
   describe('preview', () => {
-    it('调用 GET /data-sources/:id/preview 并传递 limit 参数', async () => {
+    it('调用 POST /data-sources/:id/preview 并传递 limit 参数', async () => {
       const mockPreview = {
         sql: 'SELECT * FROM test',
         total_rows: 100,
         columns: ['id', 'name'],
         preview_rows: [],
       };
-      vi.mocked(client.get).mockResolvedValueOnce({ data: mockPreview });
+      vi.mocked(client.post).mockResolvedValueOnce({ data: mockPreview });
 
       const result = await dataSourcesApi.preview('ds1', 50);
 
-      expect(client.get).toHaveBeenCalledWith('/data-sources/ds1/preview', { params: { limit: 50 } });
+      expect(client.post).toHaveBeenCalledWith('/data-sources/ds1/preview', null, { params: { limit: 50 } });
       expect(result).toEqual(mockPreview);
     });
 
     it('不传 limit 时 params.limit 为 undefined', async () => {
-      vi.mocked(client.get).mockResolvedValueOnce({
+      vi.mocked(client.post).mockResolvedValueOnce({
         data: { sql: '', total_rows: 0, columns: [], preview_rows: [] },
       });
 
       await dataSourcesApi.preview('ds1');
 
-      expect(client.get).toHaveBeenCalledWith('/data-sources/ds1/preview', { params: { limit: undefined } });
+      expect(client.post).toHaveBeenCalledWith('/data-sources/ds1/preview', null, { params: { limit: undefined } });
     });
   });
 });

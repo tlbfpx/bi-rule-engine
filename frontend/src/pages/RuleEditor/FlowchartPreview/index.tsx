@@ -28,7 +28,7 @@ function FlowInner() {
 
   // 仅 lookup 类型需要解析表名；其余类型禁用查询，避免每次打开抽屉都发无用请求
   const isLookup = ruleType === 'lookup';
-  const { data: tablesData } = useLookupTables({ page_size: 200 }, isLookup);
+  const { data: tablesData } = useLookupTables({ page_size: 100 }, isLookup);
   const tablesById = useMemo(
     () =>
       new Map(

@@ -12,17 +12,21 @@ import { useRuleEditorStore } from '../../stores/ruleStore';
 import ConditionGroupCard from './ConditionGroup';
 import type { ConditionGroup } from '../../types';
 
-function SortableGroup({ group }: { group: ConditionGroup }) {
+function SortableGroup({ group, ruleSetFields }: { group: ConditionGroup; ruleSetFields?: string[] }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: group.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <ConditionGroupCard group={group} />
+      <ConditionGroupCard group={group} ruleSetFields={ruleSetFields} />
     </div>
   );
 }
 
-export default function ConditionBuilder() {
+interface ConditionBuilderProps {
+  ruleSetFields?: string[];
+}
+
+export default function ConditionBuilder({ ruleSetFields }: ConditionBuilderProps) {
   const { config, addConditionGroup, reorderConditionGroups, setDefaultResult } = useRuleEditorStore();
 
   const sensors = useSensors(
@@ -54,7 +58,7 @@ export default function ConditionBuilder() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={config.conditions.map((g) => g.id)} strategy={verticalListSortingStrategy}>
             {config.conditions.map((group) => (
-              <SortableGroup key={group.id} group={group} />
+              <SortableGroup key={group.id} group={group} ruleSetFields={ruleSetFields} />
             ))}
           </SortableContext>
         </DndContext>

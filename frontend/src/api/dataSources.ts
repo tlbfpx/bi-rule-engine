@@ -29,5 +29,5 @@ export const dataSourcesApi = {
     client.post<{ ok: boolean }>('/data-sources/test-connection', data).then((r) => r.data),
 
   preview: (id: string, limit?: number) =>
-    client.get<DataSourcePreviewResult>(`/data-sources/${id}/preview`, { params: { limit } }).then((r) => r.data),
+    client.post<DataSourcePreviewResult>(`/data-sources/${id}/preview`, null, { params: { limit } }).then((r) => r.data),
 };

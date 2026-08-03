@@ -157,11 +157,26 @@ async def preview_data_source(ds_id: str, limit: int = Query(100, ge=1, le=500),
             query=preview_sql,
             params=preview_params,
         )
+        # 构建列画像
+        column_profiles = {}
+        for col in df.columns:
+            series = df[col]
+            null_count = int(series.isnull().sum() if hasattr(series, 'isnull') else 0)
+            sample_vals = series.dropna().head(3).tolist() if hasattr(series, 'dropna') else []
+            distinct_val = int(series.nunique()) if hasattr(series, 'nunique') else 0
+            dtype = str(series.dtype) if hasattr(series, 'dtype') else 'object'
+            column_profiles[col] = {
+                "null_rate": round(null_count / max(len(df), 1), 4),
+                "distinct_count": distinct_val,
+                "sample_values": [str(v) for v in sample_vals],
+                "dtype": dtype,
+            }
         return {
             "sql": preview_sql,
             "total_rows": len(df),
             "columns": df.columns,
             "preview_rows": df.head(limit).to_dicts(),
+            "column_profiles": column_profiles,
         }
     except Exception as e:
         logger.exception("数据源预览失败")

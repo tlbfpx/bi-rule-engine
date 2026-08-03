@@ -260,6 +260,7 @@ export interface DataSourcePreviewResult {
   total_rows: number;
   columns: string[];
   preview_rows: Record<string, unknown>[];
+  column_profiles?: Record<string, ColumnProfile>;
 }
 
 // ============ 目标表类型 ============
@@ -393,6 +394,7 @@ export interface RuleSet {
   id: string;
   name: string;
   description?: string | null;
+  data_source_id?: string | null;
   color: string;
   sort_order: number;
   enabled: boolean;

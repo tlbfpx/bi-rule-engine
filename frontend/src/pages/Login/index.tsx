@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Form, Input, Button, App } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -6,6 +7,7 @@ import { authApi } from '../../api/auth';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const { message } = App.useApp();
 
@@ -15,6 +17,7 @@ export default function LoginPage() {
       const res = await authApi.login(values);
       login(res);
       message.success('登录成功');
+      navigate('/rule-sets', { replace: true });
     } catch {
       message.error('用户名或密码错误');
     } finally {

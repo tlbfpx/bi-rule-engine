@@ -1,7 +1,7 @@
 """规则集 ORM 模型 — 业务线分组"""
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, func
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
@@ -14,6 +14,9 @@ class RuleSet(Base):
     )
     name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    data_source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("data_sources.id", ondelete="SET NULL"), index=True
+    )
     color: Mapped[str] = mapped_column(String(20), default="#1677ff")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

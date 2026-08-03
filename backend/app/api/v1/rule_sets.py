@@ -20,6 +20,7 @@ router = APIRouter(prefix="/rule-sets", tags=["规则集管理"])
 class RuleSetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
+    data_source_id: str | None = Field(default=None, min_length=1, max_length=36)
     color: str = Field(default="#1677ff", pattern=r"^#[0-9a-fA-F]{6}$")
     sort_order: int = Field(default=0, ge=0)
     enabled: bool = True
@@ -33,6 +34,7 @@ class RuleSetCreate(BaseModel):
 class RuleSetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
+    data_source_id: str | None = Field(default=None, min_length=1, max_length=36)
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     sort_order: int | None = Field(default=None, ge=0)
     enabled: bool | None = None
@@ -48,6 +50,7 @@ class RuleSetOut(BaseModel):
     id: str
     name: str
     description: str | None = None
+    data_source_id: str | None = None
     color: str
     sort_order: int
     enabled: bool
@@ -129,6 +132,7 @@ async def create_rule_set(body: RuleSetCreate, db: AsyncSession = Depends(get_db
     rs = RuleSet(
         name=body.name,
         description=body.description,
+        data_source_id=body.data_source_id,
         color=body.color,
         sort_order=body.sort_order,
         enabled=body.enabled,
@@ -157,6 +161,8 @@ async def update_rule_set(
         rs.name = body.name
     if body.description is not None:
         rs.description = body.description
+    if body.data_source_id is not None:
+        rs.data_source_id = body.data_source_id
     if body.color is not None:
         rs.color = body.color
     if body.sort_order is not None:
