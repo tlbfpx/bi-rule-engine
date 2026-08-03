@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupApiMocks } from './mocks';
 
 test.describe('认证流程', () => {
   test('未登录时重定向到登录页', async ({ page }) => {
@@ -35,43 +36,14 @@ test.describe('认证流程', () => {
   });
 
   test('已登录状态下可以访问主页', async ({ page }) => {
-    // 预设认证信息
+    // setupApiMocks 会预设 localStorage auth token
+    await setupApiMocks(page);
+
     await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.setItem('auth-store', JSON.stringify({
-        state: {
-          token: 'mock-jwt-token',
-          username: 'admin',
-          role: 'admin',
-          displayName: '管理员',
-          isAuthenticated: true,
-        },
-        version: 0,
-      }));
-    });
-
-    // Mock API
-    await page.route('**/api/v1/rule-sets', (route) => {
-      route.fulfill({
-        json: {
-          items: [{ id: 'rs_1', name: '测试业务线', description: '', color: '#1677ff', sort_order: 1, enabled: true, rule_count: 0, created_at: '2024-01-01', updated_at: '2024-01-01' }],
-          total: 1, page: 1, page_size: 20,
-        },
-      });
-    });
-    await page.route('**/api/v1/rule-sets/all', (route) => {
-      route.fulfill({ json: { items: [] } });
-    });
-    await page.route('**/api/v1/rules**', (route) => {
-      route.fulfill({ json: { items: [], total: 0, page: 1, page_size: 20 } });
-    });
-    await page.route('**/api/v1/logs/frontend-error', (route) => {
-      route.fulfill({ json: { ok: true } });
-    });
-
-    await page.reload();
+    await page.waitForTimeout(2000);
 
     // 应该在规则集页面
     await expect(page).toHaveURL(/#\/rule-sets/, { timeout: 5000 });
+    await expect(page.getByRole('heading', { name: '业务线管理' })).toBeVisible();
   });
 });

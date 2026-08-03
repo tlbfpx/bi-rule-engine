@@ -32,9 +32,10 @@ export default function ETLJobs() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<ETLJob | null>(null);
   const [runHistoryJobId, setRunHistoryJobId] = useState<string | null>(null);
+  const { modal } = App.useApp();
 
   const handleDelete = (record: ETLJob) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定删除 ETL 任务 "${record.job_name}" 吗？`,
       onOk: () => deleteJob.mutate(record.id),

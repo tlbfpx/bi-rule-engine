@@ -65,7 +65,7 @@ test.describe('应用导航与页面加载', () => {
     await trigger.click();
 
     // 折叠后：显示"BI"
-    await expect(page.getByText('BI').first).toBeVisible();
+    await expect(page.getByText('BI', { exact: true })).toBeVisible();
   });
 
   test('未知路由自动重定向到业务线管理', async ({ page }) => {

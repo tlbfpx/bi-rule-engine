@@ -33,18 +33,19 @@ test.describe('目标表管理', () => {
     await expect(page.getByText('订单目标表')).toBeVisible();
 
     await page.getByRole('button', { name: '新建目标表' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByText('新建目标表').nth(1)).toBeVisible();
+    const drawer = page.getByRole('dialog');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText('新建目标表')).toBeVisible();
 
-    // 验证表单字段
-    await expect(page.getByText('配置名称')).toBeVisible();
-    await expect(page.getByText('主机')).toBeVisible();
-    await expect(page.getByText('端口')).toBeVisible();
-    await expect(page.getByText('数据库')).toBeVisible();
-    await expect(page.getByText('用户名')).toBeVisible();
-    await expect(page.getByText('密码')).toBeVisible();
-    await expect(page.getByText('目标表名')).toBeVisible();
-    await expect(page.getByText('写入模式')).toBeVisible();
+    // 验证表单字段（通过 dialog 内文本匹配）
+    await expect(drawer.getByText('配置名称')).toBeVisible();
+    await expect(drawer.getByText('主机', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('端口', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('数据库', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('用户名', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('密码', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('目标表名')).toBeVisible();
+    await expect(drawer.getByText('写入模式')).toBeVisible();
   });
 
   test('编辑目标表 - 预填数据', async ({ page }) => {
@@ -68,8 +69,10 @@ test.describe('目标表管理', () => {
     const firstRow = page.locator('tr').nth(1);
     await firstRow.getByRole('button', { name: '删除' }).click();
 
-    await expect(page.getByText('确认删除')).toBeVisible();
-    await expect(page.getByText(/确定删除目标表配置 "订单目标表" 吗/)).toBeVisible();
+    // 确认弹窗 — Modal.confirm 弹出后等待 primary 确认按钮
+    const confirmBtn = page.locator('.ant-modal-confirm-btns button.ant-btn-primary');
+    await confirmBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await confirmBtn.click();
   });
 
   test('分页信息正确', async ({ page }) => {

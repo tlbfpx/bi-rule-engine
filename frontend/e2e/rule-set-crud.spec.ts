@@ -34,9 +34,10 @@ test.describe('业务线管理（RuleSet）CRUD 全流程', () => {
     await page.getByPlaceholder('请输入业务线名称').fill('测试新业务线');
     await page.getByPlaceholder('请输入描述').fill('E2E 测试创建的业务线');
 
-    // 选择颜色（点击第二个颜色）
-    const colorPicker = page.locator('.ant-space .ant-space-item').nth(1);
-    await colorPicker.click();
+    // 选择颜色（点击第二个预设色块 — Ant Design 6 Space 不再使用 .ant-space-item）
+    const colorSection = page.locator('.ant-modal').locator('.ant-form-item').filter({ hasText: '颜色' });
+    const colorBlocks = colorSection.locator('div[style*="cursor"]');
+    await colorBlocks.nth(1).click();
 
     // 点击确定
     await page.getByRole('dialog').getByRole('button', { name: '确 定' }).click();

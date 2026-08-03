@@ -46,8 +46,8 @@ test.describe('映射表管理', () => {
     const firstRow = page.locator('tr').nth(1);
     await firstRow.getByRole('img', { name: 'delete' }).click();
 
-    // 确认弹窗
-    await expect(page.getByText(/确定删除/)).toBeVisible({ timeout: 5000 });
+    // 确认弹窗 — Popconfirm 文案是 "确认删除？"
+    await expect(page.getByText('确认删除')).toBeVisible({ timeout: 5000 });
   });
 
   test('新建映射表按钮可见', async ({ page }) => {

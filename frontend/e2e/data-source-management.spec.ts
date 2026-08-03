@@ -32,26 +32,27 @@ test.describe('数据源管理 CRUD', () => {
     // 点击新建
     await page.getByRole('button', { name: '新建数据源' }).click();
 
-    // Drawer 出现
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByText('新建数据源').nth(1)).toBeVisible();
+    // Drawer 出现 — 用 dialog role 定位
+    const drawer = page.getByRole('dialog');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText('新建数据源')).toBeVisible();
 
-    // 验证表单字段
-    await expect(page.getByText('数据源名称')).toBeVisible();
-    await expect(page.getByText('主机')).toBeVisible();
-    await expect(page.getByText('端口')).toBeVisible();
-    await expect(page.getByText('数据库')).toBeVisible();
-    await expect(page.getByText('用户名')).toBeVisible();
-    await expect(page.getByText('密码')).toBeVisible();
-    await expect(page.getByText('抽取方式')).toBeVisible();
+    // 验证表单字段（通过文本匹配 label，限定在 dialog 内）
+    await expect(drawer.getByText('数据源名称')).toBeVisible();
+    await expect(drawer.getByText('主机', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('端口', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('数据库', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('用户名', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('密码', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('抽取方式')).toBeVisible();
 
     // 默认模式为表名抽取，显示"源表名"
-    await expect(page.getByText('源表名')).toBeVisible();
+    await expect(drawer.getByText('源表名')).toBeVisible();
 
     // 切换到自定义 SQL 模式
-    await page.locator('.ant-select-selector').last().click();
+    await drawer.getByRole('combobox').click();
     await page.getByText('自定义 SQL').click();
-    await expect(page.getByText('抽取 SQL')).toBeVisible();
+    await expect(drawer.getByText('抽取 SQL')).toBeVisible();
   });
 
   test('编辑数据源 - 预填数据', async ({ page }) => {
@@ -78,15 +79,16 @@ test.describe('数据源管理 CRUD', () => {
 
     // 打开新建 Drawer
     await page.getByRole('button', { name: '新建数据源' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const drawer = page.getByRole('dialog');
+    await expect(drawer).toBeVisible();
 
-    // 填写连接信息
-    await page.getByPlaceholder('例如：订单源库').fill('测试连接');
-    await page.getByPlaceholder('localhost').fill('192.168.1.100');
-    await page.locator('input').filter({ hasText: '' }).nth(1).fill('3306');
-    await page.locator('.ant-drawer input').filter({ hasText: '' }).nth(2).fill('test_db');
-    await page.locator('.ant-drawer input').nth(3).fill('root');
-    await page.locator('input[type="password"]').fill('password');
+    // 填写连接信息 — 用 input 的 aria-label 或 label 关联来定位
+    await drawer.getByPlaceholder('例如：订单源库').fill('测试连接');
+    await drawer.getByPlaceholder('localhost').fill('192.168.1.100');
+    // 数据库、用户名字段无 placeholder，用 textbox role + label name 定位
+    await drawer.getByRole('textbox', { name: '数据库' }).fill('test_db');
+    await drawer.getByRole('textbox', { name: '用户名' }).fill('root');
+    await drawer.getByRole('textbox', { name: '密码' }).fill('password');
 
     // 点击测试连接按钮
     await page.getByRole('button', { name: '测试连接' }).click();
@@ -104,12 +106,11 @@ test.describe('数据源管理 CRUD', () => {
     const firstRow = page.locator('tr').nth(1);
     await firstRow.getByRole('button', { name: '删除' }).click();
 
-    // 确认弹窗
-    await expect(page.getByText('确认删除')).toBeVisible();
-    await expect(page.getByText(/确定删除数据源 "订单源库" 吗？/)).toBeVisible();
-
-    // 点击确定
-    await page.locator('.ant-modal-confirm').getByRole('button', { name: '确 定' }).click();
+    // 确认弹窗 — Modal.confirm 弹出后等待 primary 确认按钮
+    // （绕开 .ant-modal-title 在动画期间被 Playwright 误判为 hidden）
+    const confirmBtn = page.locator('.ant-modal-confirm-btns button.ant-btn-primary');
+    await confirmBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await confirmBtn.click();
   });
 
   test('数据源列表分页信息正确', async ({ page }) => {

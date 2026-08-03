@@ -22,6 +22,7 @@ export default function TargetTables() {
   const deleteTt = useDeleteTargetTable();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<TargetTable | null>(null);
+  const { modal } = App.useApp();
 
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name', width: 180, ellipsis: true },
@@ -72,7 +73,7 @@ export default function TargetTables() {
   ];
 
   const handleDelete = (record: TargetTable) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定删除目标表配置 "${record.name}" 吗？`,
       onOk: () => deleteTt.mutate(record.id),

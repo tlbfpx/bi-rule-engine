@@ -22,6 +22,7 @@ export default function DataSources() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<DataSource | null>(null);
   const [previewDs, setPreviewDs] = useState<DataSource | null>(null);
+  const { modal } = App.useApp();
 
   const columns = [
     { title: '名称', dataIndex: 'name', key: 'name', width: 180, ellipsis: true },
@@ -75,7 +76,7 @@ export default function DataSources() {
   ];
 
   const handleDelete = (record: DataSource) => {
-    Modal.confirm({
+    modal.confirm({
       title: '确认删除',
       content: `确定删除数据源 "${record.name}" 吗？`,
       onOk: () => deleteDs.mutate(record.id),
