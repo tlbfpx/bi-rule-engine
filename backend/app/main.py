@@ -17,6 +17,62 @@ settings = get_settings()
 # 初始化日志系统
 setup_logging(settings)
 
+import json
+
+
+async def _reaper_loop():
+    """Reaper 协程 — 定期扫描心跳超时的 running 任务并标记为 failed。
+
+    防止进程崩溃或 commit 失败导致 run_record 永久卡在 running。
+    """
+    from sqlalchemy import text, select
+    from app.db import AsyncSessionLocal
+    interval = settings.REAPER_INTERVAL_SECONDS
+    timeout = settings.ETL_HEARTBEAT_TIMEOUT_SECONDS
+    logger.info(f"Reaper 协程已启动 (扫描间隔={interval}s, 心跳超时={timeout}s)")
+
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            async with AsyncSessionLocal() as session:
+                # 查找 running 状态且心跳超过 timeout 的记录
+                result = await session.execute(
+                    text(
+                        "SELECT id, etl_job_id, trace_id FROM etl_job_runs "
+                        "WHERE status = 'running' "
+                        "AND heartbeat_at IS NOT NULL "
+                        "AND heartbeat_at < DATE_SUB(NOW(), INTERVAL :timeout SECOND)"
+                    ),
+                    {"timeout": timeout},
+                )
+                stale_runs = result.fetchall()
+                if stale_runs:
+                    for row in stale_runs:
+                        run_id = row[0]
+                        job_id = row[1]
+                        logger.warning(
+                            f"Reaper: 发现卡死任务 [run={run_id}, job={job_id}]，标记为 failed"
+                        )
+                        await session.execute(
+                            text(
+                                "UPDATE etl_job_runs SET status='failed', "
+                                "completed_at=NOW(), "
+                                "error_log=:err "
+                                "WHERE id=:rid"
+                            ),
+                            {"rid": run_id, "err": json.dumps({
+                                "message": f"任务心跳超时（超过 {timeout} 秒无响应），被 Reaper 标记为失败",
+                                "exception": "HeartbeatTimeout",
+                            })},
+                        )
+                    await session.commit()
+                    logger.info(f"Reaper: 清理了 {len(stale_runs)} 个卡死任务")
+        except asyncio.CancelledError:
+            logger.info("Reaper 协程已停止")
+            raise
+        except Exception as e:
+            logger.error(f"Reaper 扫描异常: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +81,13 @@ async def lifespan(app: FastAPI):
     scheduler_manager.initialize(event_loop=loop)
     scheduler_manager.start()
     await scheduler_manager.load_jobs()
+
+    # 注册 ETL 进度事件 → WebSocket 转发监听器
+    from app.api.v1.ws import init_progress_listener
+    init_progress_listener(loop)
+
+    # 启动 Reaper 协程 — 定期扫描卡死的 running 任务
+    reaper_task = asyncio.create_task(_reaper_loop())
 
     # ── 自动创建默认管理员（首次启动） ──
     try:
@@ -52,6 +115,12 @@ async def lifespan(app: FastAPI):
 
     yield
     # ── 优雅关闭：按依赖顺序释放资源 ──
+    # 0. 停止 Reaper 协程
+    reaper_task.cancel()
+    try:
+        await reaper_task
+    except asyncio.CancelledError:
+        pass
     # 1. 先停止调度器（不再派发新任务）
     scheduler_manager.shutdown(wait=False)
     # 2. 关闭所有 WebSocket 连接
@@ -69,7 +138,13 @@ async def lifespan(app: FastAPI):
         await _cache.close()
     except Exception as e:
         logger.warning(f"关闭 Redis 连接失败: {e}")
-    # 4. 释放数据库连接池
+    # 4. 释放 ETL 数据源连接池缓存
+    from app.engine.etl_runner import dispose_all_source_engines
+    try:
+        dispose_all_source_engines()
+    except Exception as e:
+        logger.warning(f"释放数据源连接池失败: {e}")
+    # 5. 释放数据库连接池
     from app.db import engine as db_engine
     try:
         await db_engine.dispose()

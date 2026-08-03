@@ -22,6 +22,7 @@ class ETLJobRun(Base):
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime)  # ETL 执行期间定期更新
     duration_ms: Mapped[int | None] = mapped_column(Integer)
 
     input_rows: Mapped[int | None] = mapped_column(Integer)

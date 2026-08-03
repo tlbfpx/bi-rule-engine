@@ -1,6 +1,7 @@
 """ETL 执行引擎 — 抽取/转换/加载"""
 import time
 import asyncio
+import threading
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,7 @@ import polars as pl
 import pymysql
 from loguru import logger
 from sqlalchemy import select, create_engine, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -22,12 +24,84 @@ from app.models.etl_job_run import ETLJobRun
 from app.models.rule import Rule
 from app.models.lookup_table import LookupTable
 from app.engine.parser import RuleParser
-from app.engine.executor import RuleExecutor
+from app.engine.executor import RuleExecutor, get_default_event_bus
+from app.engine.observer import ETLProgressEvent
 
 settings = get_settings()
 
 # 安全：只允许合法标���符（表名、列名）
+# 全局并发信号量 — 限制同时执行的 ETL 数量，防止 OOM
+_etl_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_etl_semaphore() -> asyncio.Semaphore:
+    """惰性初始化全局 ETL 并发信号量（必须在 event loop 内调用）。"""
+    global _etl_semaphore
+    if _etl_semaphore is None:
+        _etl_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_ETL)
+    return _etl_semaphore
+
+
 _SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+# ───────────────────────── 连接池缓存 ─────────────────────────
+# per-data-source 缓存 SQLAlchemy engine，避免每次 ETL 新建 TCP 连接。
+# 连接异常时销毁重建。
+
+_source_engine_cache: dict[str, "Engine"] = {}
+
+
+def _source_cache_key(ds) -> str:
+    """生成数据源连接的唯一缓存键"""
+    return f"{ds.db_host}:{ds.db_port}/{ds.db_name}/{ds.db_username}"
+
+
+def _get_source_engine(ds) -> "Engine":
+    """获取或创建数据源的 SQLAlchemy engine（带缓存）"""
+    key = _source_cache_key(ds)
+    from urllib.parse import quote_plus
+    pwd = quote_plus(ds.db_password)
+    user = quote_plus(ds.db_username)
+    connection_uri = (
+        f"mysql+pymysql://{user}:{pwd}"
+        f"@{ds.db_host}:{ds.db_port}/{ds.db_name}?charset=utf8mb4"
+    )
+    engine = _source_engine_cache.get(key)
+    if engine is None:
+        engine = create_engine(
+            connection_uri,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            pool_size=5,
+            max_overflow=3,
+        )
+        _source_engine_cache[key] = engine
+        logger.info(f"创建数据源连接池: {ds.name} ({key})")
+    return engine
+
+
+def _dispose_source_engine(ds) -> None:
+    """销毁数据源的缓存 engine（连接异常时调用）"""
+    key = _source_cache_key(ds)
+    engine = _source_engine_cache.pop(key, None)
+    if engine:
+        try:
+            engine.dispose()
+        except Exception:
+            pass
+        logger.info(f"已销毁数据源连接池: {ds.name} ({key})")
+
+
+def dispose_all_source_engines() -> None:
+    """应用关闭时释放所有缓存的 engine"""
+    for key, engine in list(_source_engine_cache.items()):
+        try:
+            engine.dispose()
+        except Exception:
+            pass
+    _source_engine_cache.clear()
+    logger.info("所有数据源连接池已释放")
 
 
 # ───────────────────────── Detached 数据快照 ─────────────────────────
@@ -97,7 +171,44 @@ class TargetTableSnapshot:
         )
 
 
-def _safe_identifier(name: str, context: str = "identifier") -> str:
+def _publish_progress(run_id: str, job_id: str, phase: str, message: str = "",
+                      input_rows: int = 0, output_rows: int = 0, progress: float = 0.0) -> None:
+    """发布 ETL 阶段进度事件到 EventBus（单进程内 ws 监听器接收转发给前端）"""
+    try:
+        bus = get_default_event_bus()
+        bus.publish(ETLProgressEvent(
+            name="etl_progress",
+            run_id=run_id,
+            job_id=job_id,
+            phase=phase,
+            message=message,
+            input_rows=input_rows,
+            output_rows=output_rows,
+            progress=progress,
+        ))
+    except Exception as e:
+        logger.debug(f"发布进度事件失败（不影响执行）: {e}")
+
+
+def _heartbeat_loop(run_id: str, stop_event: threading.Event, interval: int = 30) -> None:
+    """后台心跳线程 — 定期更新 run_record 的 heartbeat_at 字段
+
+    单独使用同步 engine 写入，不依赖 async session，避免阻塞 event loop。
+    """
+    sync_engine = create_engine(settings.DATABASE_URL_SYNC, pool_pre_ping=True)
+    try:
+        while not stop_event.wait(interval):
+            try:
+                with sync_engine.connect() as conn:
+                    conn.execute(
+                        text("UPDATE etl_job_runs SET heartbeat_at = NOW() WHERE id = :rid"),
+                        {"rid": run_id},
+                    )
+                    conn.commit()
+            except Exception as e:
+                logger.debug(f"心跳更新失败 [run={run_id}]: {e}")
+    finally:
+        sync_engine.dispose()
     """验证标识符安全，防止 SQL 注入"""
     if not _SAFE_IDENTIFIER.match(name):
         raise ValueError(f"不合法的{context}: {name}")
@@ -136,25 +247,23 @@ def _read_source_sync(data_source) -> pl.DataFrame:
     """同步读取数据源（使用参数化查询）
 
     接受 DataSource ORM 对象或 DataSourceSnapshot 快照。
+    使用进程级 engine 缓存，避免每次 ETL 新建 TCP 连接。
     """
     sql, params = _build_extract_sql(data_source)
     logger.info(f"ETL 抽取 SQL: {sql}")
     if params:
         logger.debug(f"ETL 抽取参数: {params}")
-    connection_uri = (
-        f"mysql+pymysql://{data_source.db_username}:{data_source.db_password}"
-        f"@{data_source.db_host}:{data_source.db_port}/{data_source.db_name}"
-        f"?charset=utf8mb4"
-    )
-    engine = create_engine(connection_uri, pool_pre_ping=True, pool_recycle=3600)
+    engine = _get_source_engine(data_source)
     try:
         with engine.connect() as conn:
             if params:
                 df = pl.read_database(query=text(sql), connection=conn, execute_options={"parameters": params})
             else:
                 df = pl.read_database(query=text(sql), connection=conn)
-    finally:
-        engine.dispose()
+    except Exception:
+        # 连接异常时销毁缓存的 engine，下次调用自动重建
+        _dispose_source_engine(data_source)
+        raise
     logger.info(f"MySQL 读取完成: {len(df)} 行, {len(df.columns)} 列")
     return df
 
@@ -311,6 +420,7 @@ def _sync_etl_core(
     data_source,
     target,
     run_id: str,
+    job_id: str,
     rule_configs: list,
     lookup_tables: dict[str, dict],
 ) -> dict:
@@ -318,10 +428,13 @@ def _sync_etl_core(
     start_time = time.time()
     executed_sql = _get_executed_sql_for_log(data_source)
 
+    # Phase 1: Extract
+    _publish_progress(run_id, job_id, "extracting", "正在读取源数据...", progress=0.0)
     df = _read_source_sync(data_source)
     input_rows = len(df)
 
     if input_rows == 0:
+        _publish_progress(run_id, job_id, "completed", "源数据为空，跳过执行", progress=1.0)
         return {
             "status": "completed", "input_rows": 0, "output_rows": 0,
             "error_rows": 0, "duration_ms": int((time.time() - start_time) * 1000),
@@ -329,9 +442,25 @@ def _sync_etl_core(
             "incremental_value": None, "error_log": {},
         }
 
+    _publish_progress(run_id, job_id, "extracting", f"已读取 {input_rows} 行", input_rows=input_rows, progress=0.2)
+
+    # Phase 2: Transform
+    _publish_progress(run_id, job_id, "transforming", f"正在执行规则转换 ({input_rows} 行)...", progress=0.3)
     result_df, stats = _execute_transform_sync(df, lookup_tables, rule_configs)
+    _publish_progress(
+        run_id, job_id, "transforming", f"规则转换完成，输出 {len(result_df)} 行",
+        input_rows=input_rows, output_rows=len(result_df), progress=0.6,
+    )
+
+    # Phase 3: Load
+    _publish_progress(run_id, job_id, "loading", "正在写入目标表...", progress=0.7)
     written_rows = _write_to_target(result_df, target, run_id)
     new_incremental_value = _update_incremental_value(result_df, data_source)
+
+    _publish_progress(
+        run_id, job_id, "completed", f"写入完成: {written_rows} 行",
+        input_rows=input_rows, output_rows=written_rows, progress=1.0,
+    )
 
     return {
         "status": "completed", "input_rows": input_rows,
@@ -377,101 +506,126 @@ async def run_etl_job(job_id: str, run_id: Optional[str] = None,
 
     logger.info(f"开始执行 ETL 任务: job={job_id}, run={run_id}")
 
-    async with AsyncSessionLocal() as session:
-        job_result = await session.execute(select(ETLJob).where(ETLJob.id == job_id))
-        job = job_result.scalar_one_or_none()
-        if not job:
-            raise ValueError(f"ETL 任务不存在: {job_id}")
+    # 全局并发限制 — 防止多 ETL 同时执行导��� OOM
+    sem = _get_etl_semaphore()
+    async with sem:
+        async with AsyncSessionLocal() as session:
+            job_result = await session.execute(select(ETLJob).where(ETLJob.id == job_id))
+            job = job_result.scalar_one_or_none()
+            if not job:
+                raise ValueError(f"ETL 任务不存在: {job_id}")
 
-        # 在 session 关闭前提取 detached 快照，避免跨线程访问 ORM 对象触发 DetachedInstanceError
-        data_source = DataSourceSnapshot.from_orm(job.data_source)
-        target = TargetTableSnapshot.from_orm(job.target_table)
-        ds_id = job.data_source_id  # 用于后续更新增量值
+            # 在 session 关闭前提取 detached 快照，避免跨线程访问 ORM 对象触发 DetachedInstanceError
+            data_source = DataSourceSnapshot.from_orm(job.data_source)
+            target = TargetTableSnapshot.from_orm(job.target_table)
+            ds_id = job.data_source_id  # 用于后续更新增量值
 
-        if run_id is None:
-            run_record = ETLJobRun(
-                etl_job_id=job_id,
-                status="pending",
-                trace_id=get_trace_id(),
-            )
-            session.add(run_record)
-            await session.flush()
-            await session.refresh(run_record)
-            run_id = str(run_record.id)
-        else:
-            run_result = await session.execute(select(ETLJobRun).where(ETLJobRun.id == run_id))
-            run_record = run_result.scalar_one_or_none()
-            if not run_record:
-                raise ValueError(f"执行记录不存在: {run_id}")
+            if run_id is None:
+                run_record = ETLJobRun(
+                    etl_job_id=job_id,
+                    status="pending",
+                    trace_id=get_trace_id(),
+                )
+                session.add(run_record)
+                await session.flush()
+                await session.refresh(run_record)
+                run_id = str(run_record.id)
+            else:
+                run_result = await session.execute(select(ETLJobRun).where(ETLJobRun.id == run_id))
+                run_record = run_result.scalar_one_or_none()
+                if not run_record:
+                    raise ValueError(f"执行记录不存在: {run_id}")
 
-        run_record.status = "running"
-        run_record.started_at = datetime.now()
-        await session.commit()
+            run_record.status = "running"
+            run_record.started_at = datetime.now()
+            run_record.heartbeat_at = datetime.now()
+            await session.commit()
 
-        rule_configs, lookup_tables = await _load_rules_and_lookup(session, job.rule_set_id)
-        # 获取任务超时配置，优先用 job 级别，fallback 到全局默认
-        timeout_seconds = job.timeout_seconds or settings.ETL_DEFAULT_TIMEOUT_SECONDS
+            rule_configs, lookup_tables = await _load_rules_and_lookup(session, job.rule_set_id)
+            # 获取任务超时配置，优先用 job 级别，fallback 到全局默认
+            timeout_seconds = job.timeout_seconds or settings.ETL_DEFAULT_TIMEOUT_SECONDS
 
-    try:
-        # 使用 asyncio.wait_for 实现超时控制，防止源数据库查询卡住导致线程池耗尽
-        core_result = await asyncio.wait_for(
-            asyncio.to_thread(
-                _sync_etl_core, data_source, target, run_id, rule_configs, lookup_tables,
-            ),
-            timeout=timeout_seconds,
+        # 启动心跳线程
+        heartbeat_stop = threading.Event()
+        heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            args=(run_id, heartbeat_stop, settings.ETL_HEARTBEAT_INTERVAL_SECONDS),
+            daemon=True,
         )
-    except asyncio.TimeoutError:
-        logger.error(f"ETL 执行超时 [job={job_id}, run={run_id}], timeout={timeout_seconds}s")
-        core_result = {
-            "status": "failed", "input_rows": 0, "output_rows": 0, "error_rows": 0,
-            "duration_ms": timeout_seconds * 1000,
-            "executed_sql": _get_executed_sql_for_log(data_source),
-            "stats": {}, "incremental_value": None,
-            "error_log": {"message": f"ETL 执行超时（{timeout_seconds}秒）", "exception": "TimeoutError"},
-        }
-    except Exception as e:
-        logger.exception(f"ETL 执行失败 [job={job_id}, run={run_id}]")
-        core_result = {
-            "status": "failed", "input_rows": 0, "output_rows": 0, "error_rows": 0,
-            "duration_ms": int((time.time() - start_time) * 1000),
-            "executed_sql": _get_executed_sql_for_log(data_source),
-            "stats": {}, "incremental_value": None,
-            "error_log": {"message": str(e), "exception": type(e).__name__},
-        }
-
-    async with AsyncSessionLocal() as session:
-        run_result = await session.execute(select(ETLJobRun).where(ETLJobRun.id == run_id))
-        run_record = run_result.scalar_one_or_none()
-        if run_record:
-            run_record.status = core_result["status"]
-            run_record.completed_at = datetime.now()
-            run_record.duration_ms = core_result["duration_ms"]
-            run_record.input_rows = core_result["input_rows"]
-            run_record.output_rows = core_result["output_rows"]
-            run_record.error_rows = core_result["error_rows"]
-            run_record.executed_sql = core_result["executed_sql"]
-            run_record.stats = core_result["stats"]
-            run_record.error_log = core_result["error_log"]
-
-        job_result = await session.execute(select(ETLJob).where(ETLJob.id == job_id))
-        job = job_result.scalar_one_or_none()
-        if job:
-            job.last_run_at = datetime.now()
-            job.last_run_status = core_result["status"]
-            job.last_run_error = core_result["error_log"].get("message")
-
-        if core_result["incremental_value"]:
-            ds_result = await session.execute(select(DataSource).where(DataSource.id == ds_id))
-            ds = ds_result.scalar_one_or_none()
-            if ds:
-                ds.incremental_value = core_result["incremental_value"]
+        heartbeat_thread.start()
 
         try:
-            await session.commit()
-        except Exception:
-            # 如果提交失败（如 DB 不可用），确保 run_record 不会永远停在 running
-            logger.exception(f"ETL 结果写入数据库失败 [job={job_id}, run={run_id}]")
-            await session.rollback()
+            # 使用 asyncio.wait_for 实现超时控制，防止源数据库查询卡住导致线程池耗尽
+            core_result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _sync_etl_core, data_source, target, run_id, job_id, rule_configs, lookup_tables,
+                ),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"ETL 执行超时 [job={job_id}, run={run_id}], timeout={timeout_seconds}s")
+            core_result = {
+                "status": "failed", "input_rows": 0, "output_rows": 0, "error_rows": 0,
+                "duration_ms": timeout_seconds * 1000,
+                "executed_sql": _get_executed_sql_for_log(data_source),
+                "stats": {}, "incremental_value": None,
+                "error_log": {"message": f"ETL 执行超时（{timeout_seconds}秒）", "exception": "TimeoutError"},
+            }
+        except Exception as e:
+            logger.exception(f"ETL 执行失败 [job={job_id}, run={run_id}]")
+            core_result = {
+                "status": "failed", "input_rows": 0, "output_rows": 0, "error_rows": 0,
+                "duration_ms": int((time.time() - start_time) * 1000),
+                "executed_sql": _get_executed_sql_for_log(data_source),
+                "stats": {}, "incremental_value": None,
+                "error_log": {"message": str(e), "exception": type(e).__name__},
+            }
+        finally:
+            # 停止心跳线程
+            heartbeat_stop.set()
+            heartbeat_thread.join(timeout=5)
+
+        # 失败时发送失败进度事件
+        if core_result["status"] == "failed":
+            _publish_progress(
+                run_id, job_id, "failed",
+                core_result["error_log"].get("message", "ETL 执行失败"),
+                progress=0.0,
+            )
+
+        async with AsyncSessionLocal() as session:
+            run_result = await session.execute(select(ETLJobRun).where(ETLJobRun.id == run_id))
+            run_record = run_result.scalar_one_or_none()
+            if run_record:
+                run_record.status = core_result["status"]
+                run_record.completed_at = datetime.now()
+                run_record.duration_ms = core_result["duration_ms"]
+                run_record.input_rows = core_result["input_rows"]
+                run_record.output_rows = core_result["output_rows"]
+                run_record.error_rows = core_result["error_rows"]
+                run_record.executed_sql = core_result["executed_sql"]
+                run_record.stats = core_result["stats"]
+                run_record.error_log = core_result["error_log"]
+
+            job_result = await session.execute(select(ETLJob).where(ETLJob.id == job_id))
+            job = job_result.scalar_one_or_none()
+            if job:
+                job.last_run_at = datetime.now()
+                job.last_run_status = core_result["status"]
+                job.last_run_error = core_result["error_log"].get("message")
+
+            if core_result["incremental_value"]:
+                ds_result = await session.execute(select(DataSource).where(DataSource.id == ds_id))
+                ds = ds_result.scalar_one_or_none()
+                if ds:
+                    ds.incremental_value = core_result["incremental_value"]
+
+            try:
+                await session.commit()
+            except Exception:
+                # 如果提交失败（如 DB 不可用），确保 run_record 不会永远停在 running
+                logger.exception(f"ETL 结果写入数据库失败 [job={job_id}, run={run_id}]")
+                await session.rollback()
 
     return {
         "status": core_result["status"], "input_rows": core_result["input_rows"],

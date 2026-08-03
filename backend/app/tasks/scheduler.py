@@ -2,6 +2,7 @@
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlalchemy import select
 from loguru import logger
 
@@ -47,11 +48,17 @@ class SchedulerManager:
         return self._scheduler
 
     def initialize(self, event_loop=None):
-        """初始化 AsyncIOScheduler"""
+        """初始化 AsyncIOScheduler — 使用 DB jobstore 实现重启恢复"""
         if self._scheduler is not None:
             return
+        # 使用 SQLAlchemyJobStore 持久化调度状态到 MySQL
+        jobstore = SQLAlchemyJobStore(
+            url=settings.DATABASE_URL_SYNC,
+            tablename="apscheduler_jobs",
+        )
         kwargs = dict(
             timezone=settings.SCHEDULER_TIMEZONE,
+            jobstores={"default": jobstore},
             job_defaults={
                 "coalesce": settings.SCHEDULER_COALESCE,
                 "max_instances": settings.SCHEDULER_MAX_INSTANCES,
@@ -59,10 +66,9 @@ class SchedulerManager:
             },
         )
         if event_loop:
-            # 通过 event_loop 参数传给 APScheduler，而非直接操作私有属性
             kwargs["event_loop"] = event_loop
         self._scheduler = AsyncIOScheduler(**kwargs)
-        logger.info("调度器已初始化")
+        logger.info("调度器已初始化（DB jobstore）")
 
     def start(self):
         if self._scheduler and not self._scheduler.running:

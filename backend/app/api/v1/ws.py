@@ -4,6 +4,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from loguru import logger
 import json
 
+from app.engine.observer import ETLProgressEvent
+from app.engine.executor import get_default_event_bus
+from app.patterns.observer import Event
+
 router = APIRouter()
 
 # task_id 格式校验（UUID v4）
@@ -52,6 +56,57 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+class ETLProgressListener:
+    """ETL 进度事件监听器 — 将 EventBus 事件转发到 WebSocket。
+
+    EventBus 的 publish 是同步调用的（在工作线程中执行），
+    因此这里用 asyncio.run_coroutine_threadsafe 把 async send_progress 投递回 event loop。
+    """
+
+    def __init__(self):
+        self._loop = None
+
+    def set_loop(self, loop):
+        self._loop = loop
+
+    def on_event(self, event: Event) -> None:
+        if not isinstance(event, ETLProgressEvent):
+            return
+        if self._loop is None or not self._loop.is_running():
+            return
+        data = {
+            "type": "etl_progress",
+            "run_id": event.run_id,
+            "job_id": event.job_id,
+            "phase": event.phase,
+            "message": event.message,
+            "input_rows": event.input_rows,
+            "output_rows": event.output_rows,
+            "progress": event.progress,
+        }
+        asyncio_future = asyncio.run_coroutine_threadsafe(
+            manager.send_progress(event.run_id, data),
+            self._loop,
+        )
+        # 设置短超时，防止 WS 发送阻塞工作线程
+        try:
+            asyncio_future.result(timeout=5)
+        except Exception as e:
+            logger.debug(f"WS 进度转发失败 [run={event.run_id}]: {e}")
+
+
+_progress_listener = ETLProgressListener()
+
+
+def init_progress_listener(loop) -> None:
+    """在应用启动时注册 EventBus 监听器。应在 lifespan 中调用。"""
+    import asyncio
+    _progress_listener.set_loop(loop)
+    bus = get_default_event_bus()
+    bus.subscribe("etl_progress", _progress_listener)
+    logger.info("ETL 进度事件监听器已注册")
 
 
 @router.websocket("/tasks/{task_id}/progress")

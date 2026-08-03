@@ -44,6 +44,25 @@ class ExecutionFailedEvent(Event):
     rule_type: str = ""
 
 
+# ───────────────────────── ETL 阶段进度事件 ─────────────────────────
+
+
+@dataclass
+class ETLProgressEvent(Event):
+    """ETL 执行阶段进度事件
+
+    用于 WebSocket 进度推送，携带 run_id 以便 ConnectionManager 路由到正确订阅者。
+    """
+
+    run_id: str = ""
+    job_id: str = ""
+    phase: str = ""       # extracting / transforming / loading / completed / failed
+    message: str = ""
+    input_rows: int = 0
+    output_rows: int = 0
+    progress: float = 0.0  # 0.0 ~ 1.0
+
+
 class RuleExecutionListener:
     """规则执行监听器 — 记录每次规则执行统计"""
 

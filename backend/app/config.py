@@ -86,6 +86,12 @@ class Settings(BaseSettings):
     ETL_DEFAULT_TIMEOUT_SECONDS: int = 3600
     ETL_BATCH_SIZE: int = 10000
 
+    # ETL 并发与心跳
+    MAX_CONCURRENT_ETL: int = 2  # 同时执行的 ETL 数量上限（防 OOM）
+    ETL_HEARTBEAT_INTERVAL_SECONDS: int = 30  # 心跳写入间隔
+    ETL_HEARTBEAT_TIMEOUT_SECONDS: int = 300  # 心跳超时阈值（5 分钟无心跳视为卡死）
+    REAPER_INTERVAL_SECONDS: int = 60  # Reaper 扫描间隔
+
     # ── 日志 ──
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "/tmp/bi-rule-engine"
