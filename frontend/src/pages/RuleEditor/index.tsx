@@ -12,7 +12,11 @@ import FormulaEditor from './FormulaEditor';
 import FlowchartPreview from './FlowchartPreview';
 import type { RuleConfig, RuleType } from '../../types';
 
-/** 前端配置完整性校验，与后端 validate_rule_config 保持一致 */
+/** 前端配置完整性校验
+ *
+ * ⚠️ 与后端 backend/app/services/rule_validator.py:validate_rule_config 保持同步。
+ * 修改校验规则时，务必同时更新两端代码。
+ */
 function validateConfigBeforeSave(
   ruleType: RuleType,
   config: RuleConfig,
@@ -100,6 +104,9 @@ export default function RuleEditorDrawer() {
 
   const { data: allRS } = useAllRuleSets();
 
+  // 按规则集绑定的数据源 ID（稳定的依赖值，避免 allRS 对象引用变化导致 effect 重复执行）
+  const targetDSId = allRS?.items?.find((rs) => rs.id === ruleSetId)?.data_source_id ?? null;
+
   // 加载当前业务线所有规则，提取字段名供条件行下拉使用
   const { data: rulesData } = useRules(
     { rule_set_id: ruleSetId ?? undefined, page_size: 100 },
@@ -116,27 +123,20 @@ export default function RuleEditorDrawer() {
 
   // 打开编辑器时，如果没有 dataContext（未通过上传文件设置），则通过规则集关联的数据源加载列信息
   useEffect(() => {
-    if (open && !dataContext && ruleSetId) {
-      // 找到当前规则集，获取其关联的 data_source_id
-      const currentRS = allRS?.items?.find((rs) => rs.id === ruleSetId);
-      const targetDSId = currentRS?.data_source_id;
-
-      if (targetDSId) {
-        // 按规则集绑定的数据源加载字段
-        dataSourcesApi.preview(targetDSId, 100).then((res) => {
-          if (res.column_profiles) {
-            setDataContext({
-              columnProfiles: res.column_profiles,
-              previewRows: res.preview_rows,
-              totalRows: res.total_rows,
-            });
-          }
-        }).catch(() => {
-          // 数据源不可用，静默失败
-        });
-      }
+    if (open && !dataContext && targetDSId) {
+      dataSourcesApi.preview(targetDSId, 100).then((res) => {
+        if (res.column_profiles) {
+          setDataContext({
+            columnProfiles: res.column_profiles,
+            previewRows: res.preview_rows,
+            totalRows: res.total_rows,
+          });
+        }
+      }).catch(() => {
+        // 数据源不可用，静默失败
+      });
     }
-  }, [open, dataContext, ruleSetId, allRS, setDataContext]);
+  }, [open, dataContext, targetDSId, setDataContext]);
 
   const handleSave = async () => {
     if (!fieldName.trim()) {

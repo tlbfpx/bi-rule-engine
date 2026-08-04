@@ -1,3 +1,4 @@
+import { useAuthStore } from '../stores/authStore';
 import client from './client';
 import type {
   PaginatedResponse,
@@ -28,7 +29,14 @@ export const rulesApi = {
 
   /** 导出规则集所有规则为 Excel 文件 */
   exportExcel: async (ruleSetId: string, ruleSetName?: string) => {
-    const resp = await fetch(`/api/v1/rules/export?rule_set_id=${encodeURIComponent(ruleSetId)}`);
+    // fetch 不经过 Axios 拦截器，需手动附加 JWT token
+    const token = useAuthStore.getState().token;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(
+      `/api/v1/rules/export?rule_set_id=${encodeURIComponent(ruleSetId)}`,
+      { headers },
+    );
     if (!resp.ok) throw new Error('导出失败');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);

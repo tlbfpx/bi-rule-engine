@@ -27,8 +27,8 @@ def upgrade() -> None:
     columns = [c['name'] for c in inspector.get_columns('rule_sets')]
     if 'data_source_id' not in columns:
         op.add_column('rule_sets', sa.Column(
-            'data_source_id', sa.String(36), nullable=True,
-            sa.ForeignKey('data_sources.id', ondelete='SET NULL')
+            'data_source_id', sa.String(36), sa.ForeignKey('data_sources.id', ondelete='SET NULL'),
+            nullable=True,
         ))
         op.create_index('idx_rule_sets_data_source_id', 'rule_sets', ['data_source_id'])
 

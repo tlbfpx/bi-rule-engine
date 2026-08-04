@@ -50,6 +50,7 @@ export default function FieldSelect({
       }}
       onSearch={setSearchText}
       onBlur={() => setSearchText('')}
+      onDropdownVisibleChange={(open) => { if (!open) setSearchText(''); }}
       style={{ minWidth: 160, ...style }}
       placeholder={placeholder}
       showSearch

@@ -204,10 +204,11 @@ async def value_error_handler(request: Request, exc: ValueError):
     )
 
 
-from app.api.v1.router import api_router
+from app.api.v1.router import api_router, auth_router
 from app.api.v1.ws import router as ws_router
 
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")  # 认证路由：不要求 JWT
+app.include_router(api_router, prefix="/api/v1")   # 业务路由：全局 JWT 认证
 app.include_router(ws_router, prefix="/ws")
 
 

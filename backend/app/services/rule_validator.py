@@ -1,4 +1,8 @@
-"""规则配置完整性校验"""
+"""规则配置完整性校验
+
+⚠️ 与前端 frontend/src/pages/RuleEditor/index.tsx:validateConfigBeforeSave 保持同步。
+修改校验规则时，务必同时更新两端代码。
+"""
 
 
 def validate_rule_config(rule_type: str, config: dict) -> list[str]:

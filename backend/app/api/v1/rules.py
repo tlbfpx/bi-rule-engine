@@ -1,6 +1,5 @@
 """规则管理 API"""
 from io import BytesIO
-
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
@@ -10,8 +9,9 @@ from sqlalchemy import select, func
 from loguru import logger
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import BizException, NotFoundException, BizErrorCode
 from app.db import get_db
 from app.models.rule import Rule
 from app.models.rule_set import RuleSet
@@ -36,6 +36,7 @@ async def list_rules(
     query = select(Rule)
     count_query = select(func.count(Rule.id))
     if field_name:
+        # ILIKE 前后缀通配符 %xxx% 无法利用 B-tree 索引，大数据量时需考虑全文索引
         query = query.where(Rule.field_name.ilike(f"%{field_name}%"))
         count_query = count_query.where(Rule.field_name.ilike(f"%{field_name}%"))
     if rule_type:
@@ -57,26 +58,25 @@ async def list_rules(
     rule_set_ids = {r.rule_set_id for r in rules if r.rule_set_id}
     rule_set_names = {}
     if rule_set_ids:
-        from app.models.rule_set import RuleSet
         rs_result = await db.execute(select(RuleSet).where(RuleSet.id.in_(rule_set_ids)))
         for rs in rs_result.scalars().all():
             rule_set_names[rs.id] = rs.name
 
-    # 把规则集名作为动态属性附在 ORM 实例上，由 response_model(RuleOut) 序列化
+    # 把规则集名和预计算的校验错误作为动态属性附在 ORM 实例上
+    # config_errors 在创建/更新时已预计算并存入 DB，此处直接读取
     for r in rules:
         r.rule_set_name = rule_set_names.get(r.rule_set_id)
-        r.config_errors = validate_rule_config(r.rule_type, r.config or {})
 
     return {"items": rules, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("", status_code=201, response_model=RuleOut)
 async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
-    # 校验配置完整性
+    # 校验配置完整性（与前端 validateConfigBeforeSave 保持同步）
     errors = validate_rule_config(body.rule_type, body.config.model_dump())
     if errors:
-        from app.core.exceptions import BizException
         raise BizException(
+            code=BizErrorCode.VALIDATION_ERROR,
             detail="规则配置不完整，请检查条件设置",
             data={"config_errors": errors},
         )
@@ -87,6 +87,7 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
         rule_type=body.rule_type, priority=body.priority, enabled=body.enabled,
         config=body.config.model_dump(), lookup_table_id=body.lookup_table_id,
         depends_on=body.depends_on or [], description=body.description,
+        config_errors=errors,  # 写入空列表表示校验通过（DB列名 config_errors）
     )
     db.add(rule)
     await db.flush()
@@ -97,9 +98,12 @@ async def create_rule(body: RuleCreate, db: AsyncSession = Depends(get_db)):
 
 @router.put("/batch-priority")
 async def batch_update_priority(body: BatchPriorityUpdate, db: AsyncSession = Depends(get_db)):
+    # 单条 IN 查询批量获取所有规则，避免逐条 SELECT
+    ids = [item.id for item in body.items]
+    result = await db.execute(select(Rule).where(Rule.id.in_(ids)))
+    rules = {r.id: r for r in result.scalars().all()}
     for item in body.items:
-        result = await db.execute(select(Rule).where(Rule.id == item.id))
-        rule = result.scalar_one_or_none()
+        rule = rules.get(item.id)
         if rule:
             rule.priority = item.priority
     await db.flush()
@@ -160,7 +164,7 @@ def _flatten_config(rule: Rule) -> str:
 
                 if op in ("is_null", "is_not_null"):
                     cond_segments.append(f"{field} {op_label}")
-                elif val is not None:
+                elif val is not None and not isinstance(val, bool):
                     cond_segments.append(f"{field} {op_label} {val}")
                 else:
                     cond_segments.append(f"{field} {op_label}")
@@ -200,7 +204,11 @@ def _flatten_config(rule: Rule) -> str:
 
 @router.get("/export")
 async def export_rules(
-    rule_set_id: str = Query(..., min_length=1, description="规则集 ID"),
+    rule_set_id: str = Query(
+        ..., min_length=36, max_length=36,
+        pattern=r"^[a-f0-9\-]{36}$",
+        description="规则集 ID（UUID 格式）",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """导出指定规则集的所有规则为 Excel 文件"""
@@ -268,7 +276,7 @@ async def export_rules(
     # 列宽
     col_widths = [6, 18, 14, 10, 8, 6, 20, 42, 24, 18, 18]
     for col, w in enumerate(col_widths, 1):
-        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = w
+        ws.column_dimensions[get_column_letter(col)].width = w
 
     # 冻结首行
     ws.freeze_panes = "A2"
@@ -304,18 +312,20 @@ async def update_rule(rule_id: str, body: RuleUpdate, db: AsyncSession = Depends
         raise NotFoundException(detail="规则不存在")
     update_data = body.model_dump(exclude_unset=True)
 
-    # 校验配置完整性（仅在更新 config 时）
+    # 校验配置完整性（仅在更新 config 时，与前端 validateConfigBeforeSave 保持同步）
     new_rule_type = update_data.get("rule_type", rule.rule_type)
     if "config" in update_data and update_data["config"] is not None:
         if hasattr(update_data["config"], "model_dump"):
             update_data["config"] = update_data["config"].model_dump()
         errors = validate_rule_config(new_rule_type, update_data["config"])
         if errors:
-            from app.core.exceptions import BizException
             raise BizException(
+                code=BizErrorCode.VALIDATION_ERROR,
                 detail="规则配置不完整，请检查条件设置",
                 data={"config_errors": errors},
             )
+        # 预计算校验结果写入 DB，避免列表页 N+1
+        update_data["config_errors"] = errors
 
     for key, value in update_data.items():
         setattr(rule, key, value)

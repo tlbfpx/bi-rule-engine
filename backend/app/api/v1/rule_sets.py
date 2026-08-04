@@ -34,7 +34,7 @@ class RuleSetCreate(BaseModel):
 class RuleSetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
-    data_source_id: str | None = Field(default=None, min_length=1, max_length=36)
+    # data_source_id 仅在创建时设置，编辑时不可修改（与前端行为一致，防止 API 绕过）
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     sort_order: int | None = Field(default=None, ge=0)
     enabled: bool | None = None
@@ -161,8 +161,6 @@ async def update_rule_set(
         rs.name = body.name
     if body.description is not None:
         rs.description = body.description
-    if body.data_source_id is not None:
-        rs.data_source_id = body.data_source_id
     if body.color is not None:
         rs.color = body.color
     if body.sort_order is not None:

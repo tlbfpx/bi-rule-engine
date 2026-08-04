@@ -1,6 +1,6 @@
 """规则 Pydantic Schema"""
 from datetime import datetime
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Any, Optional
 from app.utils.sanitize import sanitize_user_input
 
@@ -38,6 +38,8 @@ class ConditionGroupSchema(BaseModel):
 
 
 class RuleConfigSchema(BaseModel):
+    model_config = ConfigDict(extra="allow")  # 兼容历史数据中可能存在的额外字段
+
     conditions: list[ConditionGroupSchema] = []
     cleaning_steps: list[dict] = []
     lookup_table_id: Optional[str] = None
@@ -102,7 +104,9 @@ class BatchPriorityUpdate(BaseModel):
 
 
 class RuleOut(BaseModel):
-    """规则响应。config 等半结构化字段用宽松类型，避免深度校验触发 500。"""
+    """规则响应。config 使用 RuleConfigSchema 做类型安全校验，extra='allow' 兼容历史数据。"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     rule_set_id: Optional[str] = None
     field_name: str
@@ -110,12 +114,12 @@ class RuleOut(BaseModel):
     rule_type: str
     priority: int
     enabled: bool
-    config: dict = Field(default_factory=dict)
+    config: RuleConfigSchema
     lookup_table_id: Optional[str] = None
     depends_on: list = Field(default_factory=list)
     description: Optional[str] = None
     created_by: Optional[str] = None
     rule_set_name: Optional[str] = None  # 仅 list 端点由路由注入
-    config_errors: list[str] = Field(default_factory=list)  # 仅 list 端点由路由注入
+    config_errors: list[str] = Field(default_factory=list)  # 创建/更新时预计算（对应 DB 列 config_errors）
     created_at: datetime
     updated_at: datetime

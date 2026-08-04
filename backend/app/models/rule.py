@@ -29,6 +29,10 @@ class Rule(Base):
         String(36), ForeignKey("lookup_tables.id", ondelete="SET NULL"), nullable=True, index=True
     )
     depends_on: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    config_errors: Mapped[list | None] = mapped_column(
+        JSON, nullable=True, default=list,
+        comment="规则配置完整性校验结果（创建/更新时预计算，列表端点直接读取）"
+    )
     description: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
