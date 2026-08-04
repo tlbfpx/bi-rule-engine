@@ -15,7 +15,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login(values);
-      login(res);
+      // 后端返回 access_token，映射为 authStore 期望的 token 字段名
+      login({
+        token: res.access_token,
+        username: res.username,
+        role: res.role,
+        display_name: res.display_name,
+      });
       message.success('登录成功');
       navigate('/rule-sets', { replace: true });
     } catch {
